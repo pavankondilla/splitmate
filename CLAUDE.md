@@ -246,7 +246,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 7 | API Routes | **Complete** |
 | 8 | Zod Validation | **Complete** |
 | 9 | Testing | **Complete** |
-| 10 | Frontend (pages + components) | Pending |
+| 10 | Frontend (pages + components) | **Complete** |
 
 ---
 
@@ -301,4 +301,4 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ---
 
-*Last updated: Phase 9 — Complete. Awaiting command to deploy to Vercel, then Phase 10 (Frontend).*
+*Last updated: Phase 10 — Complete. All phases done. SplitMate MVP is live.*
