@@ -23,6 +23,7 @@ export function RecordSettlementDialog({ roomId, members, currentUserId }: Recor
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ payerId: currentUserId, payeeId: "", amount: "", note: "" });
+  const memberMap = new Map(members.map((m) => [m.id, m.name]));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,7 +67,7 @@ export function RecordSettlementDialog({ roomId, members, currentUserId }: Recor
             <div className="space-y-1.5">
               <Label>From (payer)</Label>
               <Select value={form.payerId} onValueChange={(v) => setForm({ ...form, payerId: v ?? form.payerId })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select member">{memberMap.get(form.payerId)}</SelectValue></SelectTrigger>
                 <SelectContent>
                   {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                 </SelectContent>
@@ -75,7 +76,7 @@ export function RecordSettlementDialog({ roomId, members, currentUserId }: Recor
             <div className="space-y-1.5">
               <Label>To (receiver)</Label>
               <Select value={form.payeeId} onValueChange={(v) => setForm({ ...form, payeeId: v ?? form.payeeId })}>
-                <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select member">{memberMap.get(form.payeeId)}</SelectValue></SelectTrigger>
                 <SelectContent>
                   {members.filter((m) => m.id !== form.payerId).map((m) => (
                     <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>

@@ -34,6 +34,7 @@ export function AddExpenseDialog({ roomId, members, currentUserId }: AddExpenseD
     notes: "",
   });
   const [participantIds, setParticipantIds] = useState<string[]>(members.map((m) => m.id));
+  const memberMap = new Map(members.map((m) => [m.id, m.name]));
 
   function toggleParticipant(id: string) {
     setParticipantIds((prev) =>
@@ -117,7 +118,7 @@ export function AddExpenseDialog({ roomId, members, currentUserId }: AddExpenseD
               <div className="space-y-1.5">
                 <Label>Paid by</Label>
                 <Select value={form.paidBy} onValueChange={(v) => setForm({ ...form, paidBy: v ?? form.paidBy })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select member">{memberMap.get(form.paidBy)}</SelectValue></SelectTrigger>
                   <SelectContent>
                     {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                   </SelectContent>
