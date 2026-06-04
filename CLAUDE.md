@@ -247,6 +247,8 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 8 | Zod Validation | **Complete** |
 | 9 | Testing | **Complete** |
 | 10 | Frontend (pages + components) | **Complete** |
+| 11 | Production Deployment (Vercel + Clerk + splitmate.co.in) | **Complete** |
+| 12 | Bug fixes + Mobile responsiveness | **Complete** |
 
 ---
 
@@ -301,4 +303,13 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ---
 
-*Last updated: Phase 10 — Complete. All phases done. SplitMate MVP is live.*
+## Known Bug Fixes Applied
+
+| Bug | Fix |
+|---|---|
+| Balance shows wrong numbers after expense deletion | Clamped negative debt values in `getPairwiseBalances` and clamped over-settlement in `computeNetBalance` |
+| Auth loop on sign-in | `requireDbUser()` now auto-upserts user if webhook hasn't fired; middleware redirects authenticated users away from auth pages |
+
+---
+
+*Last updated: Phase 12 — Complete. App is live at splitmate.co.in. Balance bug fixed. Mobile responsive.*
