@@ -1,6 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { UnauthorizedError, NotFoundError } from "./errors";
-import { findUserByClerkId } from "@/repositories/user.repository";
+import { UnauthorizedError } from "./errors";
+import { findUserByClerkId, upsertUser } from "@/repositories/user.repository";
 
 export async function requireAuth() {
   const { userId } = await auth();
@@ -17,7 +17,24 @@ export async function getAuthUser() {
 export async function requireDbUser() {
   const { userId: clerkId } = await auth();
   if (!clerkId) throw new UnauthorizedError();
-  const user = await findUserByClerkId(clerkId);
-  if (!user) throw new NotFoundError("User account not found — please sign in again");
+
+  let user = await findUserByClerkId(clerkId);
+  if (!user) {
+    // Webhook may not have fired yet — sync user from Clerk on first access
+    const clerkUser = await currentUser();
+    if (!clerkUser) throw new UnauthorizedError();
+    const primaryEmail =
+      clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+        ?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress ?? "";
+    const name =
+      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || primaryEmail;
+    user = await upsertUser({
+      clerkId,
+      email: primaryEmail,
+      name,
+      avatarUrl: clerkUser.imageUrl ?? null,
+    });
+  }
+
   return user;
 }
