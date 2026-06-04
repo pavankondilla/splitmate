@@ -7,24 +7,29 @@ import { MembersView } from "./members-view";
 import { AddExpenseDialog } from "./add-expense-dialog";
 import { RecordSettlementDialog } from "./record-settlement-dialog";
 
+type Settlement = { id: string; payerId: string; payeeId: string; amount: number; note: string | null; settledAt: string };
+type Expense = { id: string; title: string; amount: number; category: string; paidBy: string; expenseDate: string; createdBy: string; participants: Array<{ userId: string; shareAmount: number }> };
+type Member = { id: string; name: string; email: string; role: string; joinedAt: string };
+
 interface RoomTabsProps {
   roomId: string;
-  members: Array<{ id: string; name: string; email: string; role: string; joinedAt: Date }>;
-  expenses: Array<{ id: string; title: string; amount: number; category: string; paidBy: string; expenseDate: string; createdBy: string; participants: Array<{ userId: string; shareAmount: number }> }>;
+  members: Member[];
+  expenses: Expense[];
+  settlements: Settlement[];
   balances: Array<{ userId: string; userName: string; userAvatar: string | null; netBalance: number }>;
   pairwise: Array<{ fromUserId: string; fromUserName: string; toUserId: string; toUserName: string; amount: number }>;
   currentUserId: string;
   currentUserRole: string;
 }
 
-export function RoomTabs({ roomId, members, expenses, balances, pairwise, currentUserId, currentUserRole }: RoomTabsProps) {
+export function RoomTabs({ roomId, members, expenses, settlements, balances, pairwise, currentUserId, currentUserRole }: RoomTabsProps) {
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }));
 
   return (
     <Tabs defaultValue="expenses">
       <div className="flex items-center justify-between mb-4">
         <TabsList className="bg-gray-100">
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="expenses">Activity</TabsTrigger>
           <TabsTrigger value="balances">Balances</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
         </TabsList>
@@ -35,7 +40,7 @@ export function RoomTabs({ roomId, members, expenses, balances, pairwise, curren
       </div>
 
       <TabsContent value="expenses">
-        <ExpenseList roomId={roomId} expenses={expenses} members={memberOptions} currentUserId={currentUserId} currentUserRole={currentUserRole} />
+        <ExpenseList roomId={roomId} expenses={expenses} settlements={settlements} members={memberOptions} currentUserId={currentUserId} currentUserRole={currentUserRole} />
       </TabsContent>
 
       <TabsContent value="balances">
@@ -43,7 +48,7 @@ export function RoomTabs({ roomId, members, expenses, balances, pairwise, curren
       </TabsContent>
 
       <TabsContent value="members">
-        <MembersView members={members} currentUserId={currentUserId} />
+        <MembersView members={members} expenses={expenses} settlements={settlements} currentUserId={currentUserId} />
       </TabsContent>
     </Tabs>
   );

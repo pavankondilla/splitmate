@@ -3,23 +3,24 @@ import { requireDbUser } from "@/lib/auth";
 import { getRoomDetail } from "@/services/room.service";
 import { getRoomExpenses } from "@/services/expense.service";
 import { getRoomBalances, getPairwiseBalances } from "@/services/balance.service";
+import { getRoomSettlements } from "@/services/settlement.service";
 import { formatCurrency } from "@/lib/format";
 import { RoomTabs } from "@/components/rooms/room-tabs";
 import { Badge } from "@/components/ui/badge";
-import { Copy } from "lucide-react";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 
 export default async function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireDbUser();
 
-  let detail, expenses, balances, pairwise;
+  let detail, expenses, balances, pairwise, settlements;
   try {
-    [detail, expenses, balances, pairwise] = await Promise.all([
+    [detail, expenses, balances, pairwise, settlements] = await Promise.all([
       getRoomDetail(id, user.id),
       getRoomExpenses(id, user.id),
       getRoomBalances(id, user.id),
       getPairwiseBalances(id, user.id),
+      getRoomSettlements(id, user.id),
     ]);
   } catch (err) {
     if (err instanceof NotFoundError) notFound();
@@ -37,7 +38,16 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
     name: m.user.name,
     email: m.user.email,
     role: m.membership.role,
-    joinedAt: m.membership.joinedAt,
+    joinedAt: m.membership.joinedAt.toISOString(),
+  }));
+
+  const serializedSettlements = settlements.map((s) => ({
+    id: s.id,
+    payerId: s.payerId,
+    payeeId: s.payeeId,
+    amount: s.amount,
+    note: s.note,
+    settledAt: s.settledAt.toISOString(),
   }));
 
   return (
@@ -73,6 +83,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
         roomId={room.id}
         members={memberList}
         expenses={expenses}
+        settlements={serializedSettlements}
         balances={balances}
         pairwise={pairwise}
         currentUserId={user.id}
