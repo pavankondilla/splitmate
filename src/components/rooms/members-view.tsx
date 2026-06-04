@@ -15,6 +15,7 @@ interface MembersViewProps {
   members: Member[];
   expenses: Expense[];
   settlements: Settlement[];
+  balances: Array<{ userId: string; userName: string; userAvatar: string | null; netBalance: number }>;
   currentUserId: string;
 }
 
@@ -28,9 +29,10 @@ type HistoryItem =
   | { type: "settlement_paid"; toName: string; amount: number; note: string | null; date: string }
   | { type: "settlement_received"; fromName: string; amount: number; note: string | null; date: string };
 
-export function MembersView({ members, expenses, settlements, currentUserId }: MembersViewProps) {
+export function MembersView({ members, expenses, settlements, balances, currentUserId }: MembersViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const memberMap = new Map(members.map((m) => [m.id, m.name]));
+  const balanceMap = new Map(balances.map((b) => [b.userId, b.netBalance]));
 
   function getMemberHistory(memberId: string): HistoryItem[] {
     const items: HistoryItem[] = [];
@@ -63,30 +65,12 @@ export function MembersView({ members, expenses, settlements, currentUserId }: M
     return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
-  function getMemberBalance(memberId: string): number {
-    let balance = 0;
-    for (const exp of expenses) {
-      if (exp.paidBy === memberId) {
-        const othersShares = exp.participants.filter((p) => p.userId !== memberId).reduce((s, p) => s + p.shareAmount, 0);
-        balance += othersShares;
-      } else {
-        const share = exp.participants.find((p) => p.userId === memberId);
-        if (share) balance -= share.shareAmount;
-      }
-    }
-    for (const s of settlements) {
-      if (s.payerId === memberId) balance += s.amount;
-      if (s.payeeId === memberId) balance -= s.amount;
-    }
-    return balance;
-  }
-
   return (
     <div className="space-y-2">
       {members.map((m) => {
         const isOpen = selectedId === m.id;
         const history = isOpen ? getMemberHistory(m.id) : [];
-        const balance = getMemberBalance(m.id);
+        const balance = balanceMap.get(m.id) ?? 0;
         const isYou = m.id === currentUserId;
 
         return (
