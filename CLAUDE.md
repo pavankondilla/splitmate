@@ -249,6 +249,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 10 | Frontend (pages + components) | **Complete** |
 | 11 | Production Deployment (Vercel + Clerk + splitmate.co.in) | **Complete** |
 | 12 | Bug fixes + Mobile responsiveness | **Complete** |
+| 13 | UI/UX Refinements (Activity feed, Member history, Balances) | **Complete** |
 
 ---
 
@@ -274,6 +275,39 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 
 ---
 
+## Room Detail Tab Order (UI Convention)
+
+**Default tab order for room detail pages:**
+1. **Balances** (default/first) — Financial status, who owes whom
+2. **Members** (second) — Member list with personal transaction history
+3. **Activity** (third) — Detailed transaction log (reference only)
+
+**Rationale:** Users open a room wanting to know financial status first, then dive into details.
+
+---
+
+## Activity Section Design (Bank-Statement Style)
+
+**Layout:** Two sub-sections for clarity and scannability
+1. **Expenses** — Bills added by members
+2. **Settlements** — Payments made between members
+
+**Format:** One transaction per line (bank-statement style)
+```
+Title  |  Category  |  ₹Amount  |  Paid by X  |  Date
+────────────────────────────────────────────────────
+room rent  RENT  ₹9,000  Pavan  12 Jun
+```
+
+**Visual distinction:**
+- Expenses: Blue card background
+- Settlements: Green card background
+- Minimal clutter, maximum scanability
+
+**Rationale:** Roommates need to quickly understand "what happened" without confusion. Matches familiar bank app UX.
+
+---
+
 ## Key Decisions Log
 
 | Decision | Reason |
@@ -284,6 +318,9 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | Clerk webhook for user sync | Clerk is source of truth for identity |
 | `split_type` from day 1 | Avoid painful future migration |
 | Invite code expiry field | Ready for security hardening |
+| Balances tab first | Users need financial status immediately |
+| Activity = Bank statement style | Reduce cognitive load, improve scannability |
+| Unified feed with clear sections | Balance clarity vs detail without chaos |
 
 ---
 
@@ -305,11 +342,24 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ## Known Bug Fixes Applied
 
-| Bug | Fix |
-|---|---|
-| Balance shows wrong numbers after expense deletion | Clamped negative debt values in `getPairwiseBalances` and clamped over-settlement in `computeNetBalance` |
-| Auth loop on sign-in | `requireDbUser()` now auto-upserts user if webhook hasn't fired; middleware redirects authenticated users away from auth pages |
+| Bug | Fix | Phase |
+|---|---|---|
+| Balance shows wrong numbers after expense deletion | Clamped negative debt values in `getPairwiseBalances` | Phase 12 |
+| Auth loop on sign-in | `requireDbUser()` auto-upserts user if webhook hasn't fired; middleware redirects away from auth pages | Phase 12 |
+| Pairwise balances returning empty when not settled | Rewrote `getPairwiseBalances()` to derive from net balances using greedy algorithm instead of broken debt map | Phase 13 |
+| Members tab balance inconsistent with Balances tab | Members tab now uses authoritative balance from API instead of recalculating | Phase 13 |
+| Balance view not showing who owes whom | Added sub-notes under each member showing pairwise debts (e.g., "Pavan owes ₹1000") | Phase 13 |
 
 ---
 
-*Last updated: Phase 12 — Complete. App is live at splitmate.co.in. Balance bug fixed. Mobile responsive.*
+## Phase 13 Features (UI/UX Refinements)
+
+- **Unified Activity Feed:** Merged expenses and settlements into single timeline (sorted by date)
+- **Member Personal History:** Click to expand member card and see their complete transaction history (like PhonePay statement)
+- **Balance Clarity:** Added "Who owes whom" notes under each member's balance
+- **Fixed Pairwise Logic:** Now correctly derives from net balances (greedy algorithm)
+- **Consistent Balance Calculation:** Members tab and Balances tab now show same values
+
+---
+
+*Last updated: Phase 13 — Complete. App is live at splitmate.co.in. All balance bugs fixed. UI/UX refined. Mobile responsive. Tab order finalized.*
