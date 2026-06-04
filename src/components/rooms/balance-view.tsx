@@ -38,6 +38,17 @@ export function BalanceView({ balances, pairwise, currentUserId }: BalanceViewPr
             const isPositive = b.netBalance > 0;
             const isNeutral = b.netBalance === 0;
             const isYou = b.userId === currentUserId;
+
+            // Who owes this person
+            const owedBy = pairwise.filter((p) => p.toUserId === b.userId);
+            // Who this person owes
+            const owesTo = pairwise.filter((p) => p.fromUserId === b.userId);
+
+            const subNote = isNeutral ? null
+              : isPositive
+              ? owedBy.map((p) => `${p.fromUserId === currentUserId ? "You" : p.fromUserName} owes ${formatCurrency(p.amount)}`).join(" · ")
+              : owesTo.map((p) => `Pay ${p.toUserId === currentUserId ? "you" : p.toUserName} ${formatCurrency(p.amount)}`).join(" · ");
+
             return (
               <div key={b.userId} className="flex items-center justify-between py-3 px-4 bg-white rounded-lg border border-gray-200">
                 <div className="flex items-center gap-3">
@@ -46,11 +57,14 @@ export function BalanceView({ balances, pairwise, currentUserId }: BalanceViewPr
                       {initials(b.userName)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="font-medium text-gray-900">
-                    {b.userName}{isYou && <span className="ml-1 text-xs text-gray-400">(you)</span>}
-                  </span>
+                  <div>
+                    <span className="font-medium text-gray-900">
+                      {b.userName}{isYou && <span className="ml-1 text-xs text-gray-400">(you)</span>}
+                    </span>
+                    {subNote && <p className="text-xs text-gray-400 mt-0.5">{subNote}</p>}
+                  </div>
                 </div>
-                <div className={`font-semibold text-sm ${isNeutral ? "text-gray-400" : isPositive ? "text-emerald-600" : "text-rose-600"}`}>
+                <div className={`font-semibold text-sm shrink-0 ${isNeutral ? "text-gray-400" : isPositive ? "text-emerald-600" : "text-rose-600"}`}>
                   {isNeutral ? "Settled" : isPositive ? `+${formatCurrency(b.netBalance)}` : `-${formatCurrency(Math.abs(b.netBalance))}`}
                 </div>
               </div>
