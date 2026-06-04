@@ -40,8 +40,7 @@ export function computeNetBalance(
     .reduce((sum, s) => sum + s.amount, 0);
 
   const netBalance =
-    Math.max(0, totalOwedToUser - settlementsReceived) -
-    Math.max(0, totalUserOwes - settlementsPaid);
+    (totalOwedToUser - settlementsReceived) - (totalUserOwes - settlementsPaid);
 
   return { netBalance, totalOwedToUser, totalUserOwes };
 }
