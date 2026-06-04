@@ -16,7 +16,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Header row */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
               : `Overall you owe ${formatCurrency(Math.abs(summary.totalNetBalance))}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <JoinRoomDialog />
           <CreateRoomDialog />
         </div>

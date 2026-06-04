@@ -85,7 +85,7 @@ export function AddExpenseDialog({ roomId, members, currentUserId }: AddExpenseD
         <Plus className="h-4 w-4" /> Add Expense
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add an expense</DialogTitle>
           </DialogHeader>
@@ -97,14 +97,14 @@ export function AddExpenseDialog({ roomId, members, currentUserId }: AddExpenseD
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Amount (₹)</Label>
-                <Input type="number" placeholder="0.00" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
+                <Input type="number" placeholder="0.00" step="0.01" min="0.01" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
               </div>
               <div className="space-y-1.5">
                 <Label>Date</Label>
                 <Input type="date" value={form.expenseDate} onChange={(e) => setForm({ ...form, expenseDate: e.target.value })} required />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Category</Label>
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v ?? form.category })}>

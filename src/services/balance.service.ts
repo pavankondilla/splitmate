@@ -75,6 +75,13 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
     addDebt(s.payerId, s.payeeId, -s.amount);
   }
 
+  // Clamp negative debts — orphaned settlements (from deleted expenses) must not invert balances
+  for (const toMap of debt.values()) {
+    for (const [toId, amount] of toMap.entries()) {
+      if (amount < 0) toMap.set(toId, 0);
+    }
+  }
+
   // Simplify each pair: net out A→B vs B→A
   const result: PairwiseBalance[] = [];
   const processed = new Set<string>();

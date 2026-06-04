@@ -28,14 +28,14 @@ export default function LandingPage() {
         <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-sm font-medium px-3 py-1 rounded-full mb-6">
           Built for Indian flatmates 🇮🇳
         </div>
-        <h1 className="text-5xl font-bold text-gray-900 tracking-tight mb-5">
+        <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 tracking-tight mb-5">
           Split bills,<br />
           <span className="text-indigo-600">not friendships.</span>
         </h1>
-        <p className="text-xl text-gray-500 max-w-xl mx-auto mb-10">
+        <p className="text-lg sm:text-xl text-gray-500 max-w-xl mx-auto mb-10">
           Track shared expenses with your roommates, see who owes what, and settle up in seconds. All amounts in ₹.
         </p>
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link href="/sign-up">
             <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
               Start for free <ArrowRight className="h-4 w-4" />
