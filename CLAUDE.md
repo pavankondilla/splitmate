@@ -359,6 +359,8 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 - **Balance Clarity:** Added "Who owes whom" notes under each member's balance
 - **Fixed Pairwise Logic:** Now correctly derives from net balances (greedy algorithm)
 - **Consistent Balance Calculation:** Members tab and Balances tab now show same values
+- **Activity Tab Redesign:** Parent-child card structure — each expense is a parent card with expandable split details showing each participant's status (Settled / Pending / Auto-credit). Settlements appear as standalone green cards. Date grouping (Today / Yesterday / date). Running-balance algorithm derives per-participant status across the full expense+settlement timeline.
+- **Tab Order Fixed:** Balances (default) → Members → Activity
 
 ---
 

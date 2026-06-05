@@ -26,12 +26,12 @@ export function RoomTabs({ roomId, members, expenses, settlements, balances, pai
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }));
 
   return (
-    <Tabs defaultValue="expenses">
+    <Tabs defaultValue="balances">
       <div className="flex items-center justify-between mb-4">
         <TabsList className="bg-gray-100">
-          <TabsTrigger value="expenses">Activity</TabsTrigger>
           <TabsTrigger value="balances">Balances</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="expenses">Activity</TabsTrigger>
         </TabsList>
         <div className="flex gap-2">
           <RecordSettlementDialog roomId={roomId} members={memberOptions} currentUserId={currentUserId} />
