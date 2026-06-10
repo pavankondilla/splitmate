@@ -53,29 +53,15 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-6">
       {/* Room header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{room.name}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="text-sm text-gray-500">Invite code:</span>
-            <code className="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-800 tracking-widest">
-              {room.inviteCode}
-            </code>
-            <Badge variant="secondary">{room.currency}</Badge>
-          </div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">{room.name}</h1>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <span className="text-sm text-gray-500">Invite code:</span>
+          <code className="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-800 tracking-widest">
+            {room.inviteCode}
+          </code>
+          <Badge variant="secondary">{room.currency}</Badge>
         </div>
-        {myBalance && (
-          <div className="sm:text-right">
-            <p className="text-xs text-gray-500 mb-1">Your balance</p>
-            <p className={`text-xl font-bold ${myBalance.netBalance > 0 ? "text-emerald-600" : myBalance.netBalance < 0 ? "text-rose-600" : "text-gray-400"}`}>
-              {myBalance.netBalance === 0
-                ? "Settled"
-                : myBalance.netBalance > 0
-                ? `+${formatCurrency(myBalance.netBalance)}`
-                : `-${formatCurrency(Math.abs(myBalance.netBalance))}`}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Tabs */}

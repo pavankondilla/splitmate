@@ -52,46 +52,47 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
   const settlements = await settlementRepo.findSettlementsByRoomId(roomId);
   const users = await userRepo.findUsersByIds(memberIds);
 
-  // Derive pairwise from net balances using greedy settlement algorithm.
-  // This is consistent with getRoomBalances and avoids debt-map clamping issues.
+  // Single-payment-per-debtor algorithm:
+  // Each debtor pays their full balance to the largest creditor in one shot.
+  // If that creditor receives more than they are owed, they become a debtor for
+  // the excess and pass it to the next creditor. This ensures every original
+  // debtor makes exactly ONE payment.
   const netBalances = users.map((user) => {
     const { netBalance } = computeNetBalance(user.id, expenses, participants, settlements);
     return { userId: user.id, userName: user.name, remaining: netBalance };
   });
 
-  const creditors = netBalances
-    .filter((b) => b.remaining > 0)
-    .sort((a, b) => b.remaining - a.remaining);
-
-  const debtors = netBalances
-    .filter((b) => b.remaining < 0)
-    .map((b) => ({ ...b, remaining: Math.abs(b.remaining) }))
-    .sort((a, b) => b.remaining - a.remaining);
+  const working = netBalances.map(b => ({ ...b }));
 
   const result: PairwiseBalance[] = [];
-  let ci = 0;
-  let di = 0;
 
-  while (ci < creditors.length && di < debtors.length) {
-    const creditor = creditors[ci];
-    const debtor = debtors[di];
-    const amount = Math.min(creditor.remaining, debtor.remaining);
+  while (true) {
+    const currentDebtors = working
+      .filter(b => b.remaining < -0.5)
+      .sort((a, b) => a.remaining - b.remaining); // most negative first
 
-    if (amount > 0) {
-      result.push({
-        fromUserId: debtor.userId,
-        fromUserName: debtor.userName,
-        toUserId: creditor.userId,
-        toUserName: creditor.userName,
-        amount,
-      });
-    }
+    const currentCreditors = working
+      .filter(b => b.remaining > 0.5)
+      .sort((a, b) => b.remaining - a.remaining); // most positive first
 
-    creditor.remaining -= amount;
-    debtor.remaining -= amount;
+    if (currentDebtors.length === 0 || currentCreditors.length === 0) break;
 
-    if (creditor.remaining <= 0) ci++;
-    if (debtor.remaining <= 0) di++;
+    const debtor = currentDebtors[0];
+    const creditor = currentCreditors[0];
+    const amount = Math.round(Math.abs(debtor.remaining));
+
+    if (amount < 1) break;
+
+    result.push({
+      fromUserId: debtor.userId,
+      fromUserName: debtor.userName,
+      toUserId: creditor.userId,
+      toUserName: creditor.userName,
+      amount,
+    });
+
+    debtor.remaining = 0;        // debtor fully settled in one payment
+    creditor.remaining -= amount; // creditor may become a debtor if overpaid
   }
 
   return result;
