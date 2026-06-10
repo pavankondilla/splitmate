@@ -38,8 +38,8 @@ interface ExpenseListProps {
 
 type ParticipantStatus =
   | { kind: "PENDING" }
-  | { kind: "SETTLED" }
-  | { kind: "AUTO_CREDIT"; remainingCredit: number }; // pool value after this expense was auto-credited
+  | { kind: "SETTLED"; remainingCredit?: number }   // remainingCredit > 0 when participant overpaid
+  | { kind: "AUTO_CREDIT"; remainingCredit: number }; // covered by prior credit; pool value after this expense
 
 const CATEGORY_CONFIG: Record<string, { icon: string; cardBg: string; badgeBg: string; badgeText: string }> = {
   RENT:      { icon: "🏠", cardBg: "bg-violet-50 border-violet-100",  badgeBg: "bg-violet-100",  badgeText: "text-violet-700"  },
@@ -59,6 +59,13 @@ function getDateLabel(dateStr: string): string {
   return formatDate(dateStr);
 }
 
+// Computes per-participant settlement status for every expense.
+// After all events for a (payer, participant) pair are processed:
+//   AUTO_CREDIT  — participant had pre-existing credit that covered the share
+//                  remainingCredit = pool AFTER deducting share
+//   SETTLED      — participant paid manually after the expense
+//                  remainingCredit = pool remaining after all debts cleared (overpayment)
+//   PENDING      — no settlement yet
 function computeStatuses(
   expenses: Expense[],
   settlements: Settlement[]
@@ -75,17 +82,20 @@ function computeStatuses(
   for (const pairKey of pairSet) {
     const [payerId, participantId] = pairKey.split("|");
 
-    type Event =
-      | { type: "expense"; expId: string; share: number; time: number }
-      | { type: "settlement"; amount: number; time: number };
+    type ExpEvent = { type: "expense"; expId: string; share: number; time: number };
+    type SetEvent = { type: "settlement"; amount: number; time: number };
+    type Ev = ExpEvent | SetEvent;
 
-    const events: Event[] = [];
+    const events: Ev[] = [];
+    const expEvents: ExpEvent[] = [];
 
     for (const exp of expenses) {
       if (exp.paidBy === payerId) {
         const p = exp.participants.find((pt) => pt.userId === participantId);
         if (p) {
-          events.push({ type: "expense", expId: exp.id, share: p.shareAmount, time: new Date(exp.expenseDate).getTime() });
+          const ev: ExpEvent = { type: "expense", expId: exp.id, share: p.shareAmount, time: new Date(exp.expenseDate).getTime() };
+          events.push(ev);
+          expEvents.push(ev);
         }
       }
     }
@@ -97,24 +107,25 @@ function computeStatuses(
     }
 
     events.sort((a, b) => a.time - b.time);
+    expEvents.sort((a, b) => a.time - b.time);
 
     let pool = 0;
     const pending: Array<{ expId: string; remaining: number }> = [];
 
-    for (const event of events) {
-      if (event.type === "expense") {
-        if (!result.has(event.expId)) result.set(event.expId, new Map());
-        const expMap = result.get(event.expId)!;
-        if (pool >= event.share) {
-          pool -= event.share;
+    for (const ev of events) {
+      if (ev.type === "expense") {
+        if (!result.has(ev.expId)) result.set(ev.expId, new Map());
+        const expMap = result.get(ev.expId)!;
+        if (pool >= ev.share) {
+          pool -= ev.share;
           expMap.set(participantId, { kind: "AUTO_CREDIT", remainingCredit: pool });
         } else {
           expMap.set(participantId, { kind: "PENDING" });
-          pending.push({ expId: event.expId, remaining: event.share - pool });
+          pending.push({ expId: ev.expId, remaining: ev.share - pool });
           pool = 0;
         }
       } else {
-        pool += event.amount;
+        pool += ev.amount;
         while (pool > 0 && pending.length > 0) {
           const oldest = pending[0];
           if (pool >= oldest.remaining) {
@@ -128,25 +139,53 @@ function computeStatuses(
         }
       }
     }
+
+    // If pool > 0 after all events, participant overpaid.
+    // Store remainingCredit on the chronologically last expense so credit
+    // shows exactly once on the most recent card.
+    if (pool > 0 && expEvents.length > 0) {
+      const lastExpId = expEvents[expEvents.length - 1].expId;
+      const existing = result.get(lastExpId)?.get(participantId);
+      // Only attach to SETTLED cards (AUTO_CREDIT already has remainingCredit set correctly)
+      if (existing?.kind === "SETTLED") {
+        result.get(lastExpId)?.set(participantId, { kind: "SETTLED", remainingCredit: pool });
+      }
+    }
   }
 
   return result;
 }
 
-type DateGroup = {
-  label: string;
-  expenses: Expense[];
-  settlements: Settlement[];
-};
-
 export function ExpenseList({ roomId, expenses, settlements, members, currentUserId, currentUserRole }: ExpenseListProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
-  const [expandedSettlements, setExpandedSettlements] = useState<Set<string>>(new Set());
+  const [showSettlements, setShowSettlements] = useState(false);
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
   const statusMap = useMemo(() => computeStatuses(expenses, settlements), [expenses, settlements]);
+
+  // Group expenses by date label, sorted newest first
+  const expenseGroups = useMemo(() => {
+    const groups = new Map<string, { label: string; exps: Expense[]; sortKey: number }>();
+    for (const exp of expenses) {
+      const label = getDateLabel(exp.expenseDate);
+      const time = new Date(exp.expenseDate).getTime();
+      if (!groups.has(label)) groups.set(label, { label, exps: [], sortKey: time });
+      const g = groups.get(label)!;
+      g.exps.push(exp);
+      if (time > g.sortKey) g.sortKey = time;
+    }
+    return Array.from(groups.values())
+      .sort((a, b) => b.sortKey - a.sortKey)
+      .map((g) => ({ label: g.label, expenses: g.exps }));
+  }, [expenses]);
+
+  // Settlements sorted newest first
+  const sortedSettlements = useMemo(
+    () => [...settlements].sort((a, b) => new Date(b.settledAt).getTime() - new Date(a.settledAt).getTime()),
+    [settlements]
+  );
 
   async function handleDelete(expenseId: string) {
     setDeleting(expenseId);
@@ -167,15 +206,6 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
     });
   }
 
-  function toggleSettlements(dateKey: string) {
-    setExpandedSettlements((prev) => {
-      const next = new Set(prev);
-      if (next.has(dateKey)) next.delete(dateKey);
-      else next.add(dateKey);
-      return next;
-    });
-  }
-
   if (expenses.length === 0 && settlements.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -187,255 +217,217 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
     );
   }
 
-  // Group expenses and settlements by date
-  const dateGroups: Map<string, DateGroup> = new Map();
-
-  for (const exp of expenses) {
-    const dateLabel = getDateLabel(exp.expenseDate);
-    if (!dateGroups.has(dateLabel)) {
-      dateGroups.set(dateLabel, { label: dateLabel, expenses: [], settlements: [] });
-    }
-    dateGroups.get(dateLabel)!.expenses.push(exp);
-  }
-
-  for (const settlement of settlements) {
-    const dateLabel = getDateLabel(settlement.settledAt);
-    if (!dateGroups.has(dateLabel)) {
-      dateGroups.set(dateLabel, { label: dateLabel, expenses: [], settlements: [] });
-    }
-    dateGroups.get(dateLabel)!.settlements.push(settlement);
-  }
-
-  // Sort groups by date descending
-  const sortedGroups = Array.from(dateGroups.values()).sort((a, b) => {
-    const aDate = new Date(a.expenses[0]?.expenseDate ?? a.settlements[0]?.settledAt ?? "");
-    const bDate = new Date(b.expenses[0]?.expenseDate ?? b.settlements[0]?.settledAt ?? "");
-    return bDate.getTime() - aDate.getTime();
-  });
-
   return (
     <div className="space-y-6">
-      {sortedGroups.map(({ label, expenses: dayExpenses, settlements: daySettlements }) => (
+
+      {/* ── EXPENSE GROUPS BY DATE ── */}
+      {expenseGroups.map(({ label, expenses: dayExps }) => (
         <div key={label}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">{label}</p>
-
           <div className="space-y-3">
-            {/* ── EXPENSES SECTION ── */}
-            {dayExpenses.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 px-1 mb-2">
-                  <span className="text-sm font-bold text-blue-600">📊 EXPENSES</span>
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
-                    {dayExpenses.length}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {dayExpenses.map((exp) => {
-                    const cat = CATEGORY_CONFIG[exp.category] ?? CATEGORY_CONFIG.OTHER;
-                    const paidByName = memberMap.get(exp.paidBy) ?? "Unknown";
-                    const iAmPayer = exp.paidBy === currentUserId;
-                    const myParticipant = exp.participants.find((p) => p.userId === currentUserId);
-                    const myShare = myParticipant?.shareAmount;
-                    const canDelete = exp.createdBy === currentUserId;
-                    const isExpanded = expandedExpenses.has(exp.id);
-                    const expStatuses = statusMap.get(exp.id);
+            {dayExps.map((exp) => {
+              const cat = CATEGORY_CONFIG[exp.category] ?? CATEGORY_CONFIG.OTHER;
+              const paidByName = memberMap.get(exp.paidBy) ?? "Unknown";
+              const iAmPayer = exp.paidBy === currentUserId;
+              const myShare = exp.participants.find((p) => p.userId === currentUserId)?.shareAmount;
+              const canDelete = exp.createdBy === currentUserId;
+              const isExpanded = expandedExpenses.has(exp.id);
+              const expStatuses = statusMap.get(exp.id);
 
-                    return (
-                      <div key={`exp-${exp.id}`} className={`rounded-xl border ${cat.cardBg} overflow-hidden`}>
-                        <div className="p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-3 flex-1 min-w-0">
-                              <span className="text-2xl leading-none mt-0.5 shrink-0">{cat.icon}</span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-semibold text-gray-900 truncate">{exp.title}</span>
-                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${cat.badgeBg} ${cat.badgeText}`}>
-                                    {exp.category}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-500 mt-0.5">
-                                  Paid by{" "}
-                                  <span className="font-medium text-gray-700">{iAmPayer ? "You" : paidByName}</span>
-                                  <span className="mx-1">·</span>
-                                  {formatDate(exp.expenseDate)}
-                                </p>
-                                {myShare !== undefined && !iAmPayer && (
-                                  <div className="mt-2 inline-flex items-center text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg">
-                                    Your share: {formatCurrency(myShare)}
-                                  </div>
-                                )}
-                                {iAmPayer && (
-                                  <div className="mt-2 inline-flex items-center text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
-                                    You paid
-                                  </div>
-                                )}
-                              </div>
+              return (
+                <div key={`exp-${exp.id}`} className={`rounded-xl border ${cat.cardBg} overflow-hidden`}>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <span className="text-2xl leading-none mt-0.5 shrink-0">{cat.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-gray-900 truncate">{exp.title}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${cat.badgeBg} ${cat.badgeText}`}>
+                              {exp.category}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-0.5">
+                            Paid by{" "}
+                            <span className="font-medium text-gray-700">{iAmPayer ? "You" : paidByName}</span>
+                            <span className="mx-1">·</span>
+                            {formatDate(exp.expenseDate)}
+                          </p>
+                          {myShare !== undefined && !iAmPayer && (
+                            <div className="mt-2 inline-flex items-center text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg">
+                              Your share: {formatCurrency(myShare)}
                             </div>
-                            <div className="flex items-start gap-1 shrink-0">
-                              <p className="font-bold text-gray-900 text-lg leading-none">{formatCurrency(exp.amount)}</p>
-                              {canDelete && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-gray-400 hover:text-rose-500 -mt-0.5 ml-1"
-                                  onClick={() => handleDelete(exp.id)}
-                                  disabled={deleting === exp.id}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                          )}
+                          {iAmPayer && (
+                            <div className="mt-2 inline-flex items-center text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
+                              You paid
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-1 shrink-0">
+                        <p className="font-bold text-gray-900 text-lg leading-none">{formatCurrency(exp.amount)}</p>
+                        {canDelete && (
+                          <Button
+                            variant="ghost" size="sm"
+                            className="h-7 w-7 p-0 text-gray-400 hover:text-rose-500 -mt-0.5 ml-1"
+                            onClick={() => handleDelete(exp.id)}
+                            disabled={deleting === exp.id}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => toggleExpand(exp.id)}
+                      className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {isExpanded ? "Hide split details" : `View split details (${exp.participants.length} members)`}
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-black/5 bg-white/60 px-4 py-3 space-y-2.5">
+                      {/* Participant rows */}
+                      {exp.participants.map((p) => {
+                        const name = memberMap.get(p.userId) ?? "Unknown";
+                        const isMe = p.userId === currentUserId;
+                        const isPayer = p.userId === exp.paidBy;
+                        const status = expStatuses?.get(p.userId);
+
+                        return (
+                          <div key={p.userId} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0">
+                                {name[0]?.toUpperCase()}
+                              </div>
+                              <span className={`text-sm ${isMe ? "font-semibold text-gray-900" : "text-gray-700"}`}>
+                                {isMe ? "You" : name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium text-gray-900">{formatCurrency(p.shareAmount)}</span>
+                              {isPayer ? (
+                                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Paid</span>
+                              ) : status?.kind === "SETTLED" ? (
+                                <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Settled
+                                </span>
+                              ) : status?.kind === "AUTO_CREDIT" ? (
+                                <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
+                                  <Sparkles className="h-3.5 w-3.5" /> Auto-credit
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                                  <Clock className="h-3.5 w-3.5" /> Pending
+                                </span>
                               )}
                             </div>
                           </div>
+                        );
+                      })}
 
-                          <button
-                            onClick={() => toggleExpand(exp.id)}
-                            className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                            {isExpanded ? "Hide split details" : `View split details (${exp.participants.length} members)`}
-                          </button>
-                        </div>
+                      {/* Credit summary — show for AUTO_CREDIT (remaining after use)
+                          and for SETTLED with overpayment (remainingCredit set on last expense) */}
+                      {(() => {
+                        const creditHolders = exp.participants
+                          .filter((p) => p.userId !== exp.paidBy)
+                          .flatMap((p) => {
+                            const s = expStatuses?.get(p.userId);
+                            if (s?.kind === "AUTO_CREDIT" && s.remainingCredit > 0) {
+                              return [{ userId: p.userId, credit: s.remainingCredit }];
+                            }
+                            if (s?.kind === "SETTLED" && s.remainingCredit && s.remainingCredit > 0) {
+                              return [{ userId: p.userId, credit: s.remainingCredit }];
+                            }
+                            return [];
+                          });
 
-                        {isExpanded && (
-                          <div className="border-t border-black/5 bg-white/60 px-4 py-3 space-y-2.5">
-                            {exp.participants.map((p) => {
-                              const name = memberMap.get(p.userId) ?? "Unknown";
-                              const isMe = p.userId === currentUserId;
-                              const isPayer = p.userId === exp.paidBy;
-                              const status = expStatuses?.get(p.userId);
+                        if (creditHolders.length === 0) return null;
 
-                              return (
-                                <div key={p.userId} className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0">
-                                      {name[0]?.toUpperCase()}
-                                    </div>
-                                    <span className={`text-sm ${isMe ? "font-semibold text-gray-900" : "text-gray-700"}`}>
-                                      {isMe ? "You" : name}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-sm font-medium text-gray-900">{formatCurrency(p.shareAmount)}</span>
-                                    {isPayer ? (
-                                      <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                                        Paid
-                                      </span>
-                                    ) : status?.kind === "SETTLED" ? (
-                                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
-                                        <CheckCircle2 className="h-3.5 w-3.5" /> Settled
-                                      </span>
-                                    ) : status?.kind === "AUTO_CREDIT" ? (
-                                      <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
-                                        <Sparkles className="h-3.5 w-3.5" /> Auto-credit
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
-                                        <Clock className="h-3.5 w-3.5" /> Pending
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-
-                            {(() => {
-                              // Only show credit summary on AUTO_CREDIT cards.
-                              // Use the remainingCredit stored at the exact moment the
-                              // auto-credit was applied — not the current overall balance.
-                              const creditHolders = exp.participants
-                                .filter((p) => p.userId !== exp.paidBy)
-                                .flatMap((p) => {
-                                  const s = expStatuses?.get(p.userId);
-                                  if (s?.kind === "AUTO_CREDIT" && s.remainingCredit > 0) {
-                                    return [{ userId: p.userId, credit: s.remainingCredit }];
-                                  }
-                                  return [];
-                                });
-
-                              if (creditHolders.length === 0) return null;
-
-                              return (
-                                <div className="border-t border-blue-100 pt-2.5 mt-0.5">
-                                  <p className="text-xs text-blue-500 font-semibold mb-2">💰 Credit remaining</p>
-                                  {creditHolders.map((c) => (
-                                    <div key={c.userId} className="flex items-center justify-between">
-                                      <span className="text-xs font-medium text-blue-700">
-                                        {c.userId === currentUserId ? "You" : (memberMap.get(c.userId) ?? "Unknown")}
-                                      </span>
-                                      <span className="text-xs font-semibold text-blue-700">
-                                        {formatCurrency(c.credit)} after this expense
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── SETTLEMENTS SECTION ── */}
-            <div>
-              <button
-                onClick={() => toggleSettlements(label)}
-                className="flex items-center gap-2 px-1 py-1.5 rounded transition-colors hover:bg-gray-50 w-full"
-              >
-                <span className="text-sm font-bold text-emerald-600">💳 SETTLEMENTS</span>
-                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
-                  {daySettlements.length}
-                </span>
-                <span className="ml-auto text-xs text-gray-400">
-                  {expandedSettlements.has(label) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </span>
-              </button>
-
-              {expandedSettlements.has(label) && (
-                <div className="space-y-2 mt-2">
-                  {daySettlements.length === 0 ? (
-                    <p className="text-xs text-gray-400 px-1 py-2">No settlements on this date</p>
-                  ) : (
-                    daySettlements.map((s) => {
-                      const payerName = memberMap.get(s.payerId) ?? "Unknown";
-                      const payeeName = memberMap.get(s.payeeId) ?? "Unknown";
-                      const isMyPayment = s.payerId === currentUserId;
-                      const isMyReceipt = s.payeeId === currentUserId;
-
-                      return (
-                        <div key={`set-${s.id}`} className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-2xl shrink-0">💳</span>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
-                                <span className="truncate">{isMyPayment ? "You" : payerName}</span>
-                                <ArrowRight className="h-3 w-3 text-gray-400 shrink-0" />
-                                <span className="truncate">{isMyReceipt ? "You" : payeeName}</span>
+                        return (
+                          <div className="border-t border-blue-100 pt-2.5 mt-0.5">
+                            <p className="text-xs text-blue-500 font-semibold mb-2">💰 Credit remaining</p>
+                            {creditHolders.map((c) => (
+                              <div key={c.userId} className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-blue-700">
+                                  {c.userId === currentUserId ? "You" : (memberMap.get(c.userId) ?? "Unknown")}
+                                </span>
+                                <span className="text-xs font-semibold text-blue-700">
+                                  {formatCurrency(c.credit)} credit with {iAmPayer ? "you" : paidByName}
+                                </span>
                               </div>
-                              {s.note && <p className="text-xs text-gray-500 mt-0.5 truncate">{s.note}</p>}
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-bold text-emerald-700">{formatCurrency(s.amount)}</p>
-                              <p className="text-xs text-gray-400">{formatDate(s.settledAt)}</p>
-                            </div>
+                            ))}
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })()}
+                    </div>
                   )}
                 </div>
-              )}
-
-              {!expandedSettlements.has(label) && daySettlements.length === 0 && (
-                <p className="text-xs text-gray-400 px-1 py-2">(No settlements on this date)</p>
-              )}
-            </div>
+              );
+            })}
           </div>
         </div>
       ))}
+
+      {/* ── GLOBAL SETTLEMENTS SECTION (always at bottom, collapsed by default) ── */}
+      {sortedSettlements.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowSettlements((v) => !v)}
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+          >
+            <span className="text-sm font-bold text-emerald-700">💳 All Settlements</span>
+            <span className="text-xs bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-semibold">
+              {sortedSettlements.length}
+            </span>
+            <span className="ml-auto text-emerald-600">
+              {showSettlements ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </span>
+          </button>
+
+          {showSettlements && (
+            <div className="mt-2 space-y-2">
+              {sortedSettlements.map((s) => {
+                const payerName = memberMap.get(s.payerId) ?? "Unknown";
+                const payeeName = memberMap.get(s.payeeId) ?? "Unknown";
+                const isMyPayment = s.payerId === currentUserId;
+                const isMyReceipt = s.payeeId === currentUserId;
+
+                return (
+                  <div key={`set-${s.id}`} className="rounded-xl border border-emerald-100 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xl shrink-0">💳</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                            <span className="truncate">{isMyPayment ? "You" : payerName}</span>
+                            <ArrowRight className="h-3 w-3 text-gray-400 shrink-0" />
+                            <span className="truncate">{isMyReceipt ? "You" : payeeName}</span>
+                          </div>
+                          {s.note && <p className="text-xs text-gray-500 mt-0.5 truncate">{s.note}</p>}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-emerald-700">{formatCurrency(s.amount)}</p>
+                        <p className="text-xs text-gray-400">{formatDate(s.settledAt)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Edge: settlements exist but no expenses */}
+      {expenses.length === 0 && settlements.length > 0 && (
+        <p className="text-sm text-gray-400 text-center py-4">No expenses yet. {settlements.length} settlement(s) recorded below.</p>
+      )}
     </div>
   );
 }
