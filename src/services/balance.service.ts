@@ -84,32 +84,55 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
     setDebt(s.payeeId, s.payerId, getDebt(s.payeeId, s.payerId) - s.amount);
   }
 
-  // Build pairwise result from non-zero net debts
-  const result: PairwiseBalance[] = [];
+  // Flatten pairDebts into a canonical single-direction map.
+  // If A owes B ₹900 AND B owes A ₹700, net to one line: A owes B ₹200.
+  // Canonical key: smaller userId first → "id1:id2" always represents id1→id2.
+  const netted = new Map<string, { fromId: string; toId: string; amount: number }>();
 
   for (const [payerId, debtMap] of pairDebts) {
-    for (const [participantId, netDebt] of debtMap) {
-      const rounded = Math.round(netDebt);
-      if (rounded > 0) {
-        // Participant still owes payer
-        result.push({
-          fromUserId: participantId,
-          fromUserName: userMap.get(participantId) ?? "Unknown",
-          toUserId: payerId,
-          toUserName: userMap.get(payerId) ?? "Unknown",
-          amount: rounded,
-        });
-      } else if (rounded < 0) {
-        // Participant overpaid → payer owes participant
-        result.push({
-          fromUserId: payerId,
-          fromUserName: userMap.get(payerId) ?? "Unknown",
-          toUserId: participantId,
-          toUserName: userMap.get(participantId) ?? "Unknown",
-          amount: Math.abs(rounded),
-        });
+    for (const [participantId, rawDebt] of debtMap) {
+      const debt = Math.round(rawDebt);
+      if (debt === 0) continue;
+
+      // Determine actual direction
+      const fromId = debt > 0 ? participantId : payerId;
+      const toId   = debt > 0 ? payerId       : participantId;
+      const amt    = Math.abs(debt);
+
+      // Canonical key — always smaller string first to deduplicate A→B and B→A
+      const canonKey = [fromId, toId].sort().join(":");
+      const existing = netted.get(canonKey);
+
+      if (!existing) {
+        netted.set(canonKey, { fromId, toId, amount: amt });
+      } else {
+        if (existing.fromId === fromId) {
+          // Same direction — add
+          existing.amount += amt;
+        } else {
+          // Opposite direction — subtract (net)
+          existing.amount -= amt;
+          if (existing.amount < 0) {
+            // Direction flipped
+            existing.fromId = fromId;
+            existing.toId   = toId;
+            existing.amount = Math.abs(existing.amount);
+          }
+        }
       }
     }
+  }
+
+  const result: PairwiseBalance[] = [];
+  for (const { fromId, toId, amount } of netted.values()) {
+    if (amount < 1) continue;
+    result.push({
+      fromUserId:   fromId,
+      fromUserName: userMap.get(fromId) ?? "Unknown",
+      toUserId:     toId,
+      toUserName:   userMap.get(toId)   ?? "Unknown",
+      amount,
+    });
   }
 
   return result;
