@@ -134,6 +134,36 @@ function computeStatuses(
   return result;
 }
 
+// Computes current net credit for each (payer → participant) pair
+// Positive value = participant has overpaid and has credit with that payer
+function computeCredits(
+  expenses: Expense[],
+  settlements: Settlement[]
+): Map<string, Map<string, number>> {
+  const credit = new Map<string, Map<string, number>>();
+
+  function getMap(payerId: string) {
+    if (!credit.has(payerId)) credit.set(payerId, new Map());
+    return credit.get(payerId)!;
+  }
+
+  for (const exp of expenses) {
+    const map = getMap(exp.paidBy);
+    for (const p of exp.participants) {
+      if (p.userId !== exp.paidBy) {
+        map.set(p.userId, (map.get(p.userId) ?? 0) - p.shareAmount);
+      }
+    }
+  }
+
+  for (const s of settlements) {
+    const map = getMap(s.payeeId);
+    map.set(s.payerId, (map.get(s.payerId) ?? 0) + s.amount);
+  }
+
+  return credit;
+}
+
 type FeedItem =
   | { type: "expense"; data: Expense; date: string }
   | { type: "settlement"; data: Settlement; date: string };
@@ -145,6 +175,7 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
   const statusMap = useMemo(() => computeStatuses(expenses, settlements), [expenses, settlements]);
+  const creditMap = useMemo(() => computeCredits(expenses, settlements), [expenses, settlements]);
 
   const feed: FeedItem[] = useMemo(
     () =>
@@ -340,6 +371,33 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                           </div>
                         );
                       })}
+
+                      {/* Credit summary — show participants who have overpaid */}
+                      {(() => {
+                        const payerCredits = creditMap.get(exp.paidBy);
+                        const creditHolders = exp.participants
+                          .filter((p) => p.userId !== exp.paidBy)
+                          .map((p) => ({ userId: p.userId, credit: payerCredits?.get(p.userId) ?? 0 }))
+                          .filter((c) => c.credit > 0);
+
+                        if (creditHolders.length === 0) return null;
+
+                        return (
+                          <div className="border-t border-blue-100 pt-2.5 mt-0.5">
+                            <p className="text-xs text-blue-500 font-semibold mb-2">💰 Credit summary</p>
+                            {creditHolders.map((c) => (
+                              <div key={c.userId} className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-blue-700">
+                                  {c.userId === currentUserId ? "You" : (memberMap.get(c.userId) ?? "Unknown")}
+                                </span>
+                                <span className="text-xs font-semibold text-blue-700">
+                                  {formatCurrency(c.credit)} credit remaining
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
