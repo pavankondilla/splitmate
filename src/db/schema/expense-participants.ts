@@ -13,6 +13,8 @@ export const expenseParticipants = pgTable("expense_participants", {
   shareAmount: integer("share_amount").notNull(),
   sharePercentage: decimal("share_percentage", { precision: 5, scale: 2 }),
   isSettled: boolean("is_settled").default(false).notNull(),
+  // Amount covered by user's credit pool (0 = none, >0 = AUTO_CREDITED)
+  creditApplied: integer("credit_applied").default(0).notNull(),
 });
 
 export type ExpenseParticipant = typeof expenseParticipants.$inferSelect;

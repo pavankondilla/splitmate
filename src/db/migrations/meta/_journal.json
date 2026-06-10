@@ -22,6 +22,13 @@
       "when": 1781119828404,
       "tag": "0002_foamy_pet_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781119966024,
+      "tag": "0003_swift_network",
+      "breakpoints": true
     }
   ]
 }

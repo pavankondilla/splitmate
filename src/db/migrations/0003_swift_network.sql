@@ -1,0 +1,1 @@
+ALTER TABLE "expense_participants" ADD COLUMN "credit_applied" integer DEFAULT 0 NOT NULL;
