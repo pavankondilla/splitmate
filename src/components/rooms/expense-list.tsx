@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { Trash2, ChevronDown, ChevronUp, CheckCircle2, Clock, Sparkles, Receipt, ArrowRight } from "lucide-react";
+import { Trash2, ChevronDown, ChevronUp, CheckCircle2, Clock, Sparkles, Receipt, ArrowRight, Wallet } from "lucide-react";
 
-interface Participant { userId: string; shareAmount: number }
+interface Participant { id: string; userId: string; shareAmount: number; creditApplied: number }
 interface Expense {
   id: string;
   title: string;
@@ -161,9 +161,35 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
   const [deleting, setDeleting] = useState<string | null>(null);
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
   const [showSettlements, setShowSettlements] = useState(false);
+  const [availableCredit, setAvailableCredit] = useState(0);
+  const [applyingCredit, setApplyingCredit] = useState<string | null>(null);
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
   const statusMap = useMemo(() => computeStatuses(expenses, settlements), [expenses, settlements]);
+
+  useEffect(() => {
+    fetch(`/api/rooms/${roomId}/credits`)
+      .then((r) => r.json())
+      .then((credits: Array<{ totalCredit: number; usedCredit: number }>) => {
+        const total = credits.reduce((sum, c) => sum + (c.totalCredit - c.usedCredit), 0);
+        setAvailableCredit(total);
+      })
+      .catch(() => {});
+  }, [roomId]);
+
+  async function handleApplyCredit(participantId: string) {
+    setApplyingCredit(participantId);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/credits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expenseParticipantId: participantId }),
+      });
+      if (res.ok) router.refresh();
+    } finally {
+      setApplyingCredit(null);
+    }
+  }
 
   // Group expenses by date label, sorted newest first
   const expenseGroups = useMemo(() => {
@@ -219,6 +245,23 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
 
   return (
     <div className="space-y-6">
+
+      {/* ── CREDIT NOTIFICATION CARD ── */}
+      {availableCredit > 0 && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-3">
+          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+            <Wallet className="h-4 w-4 text-blue-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-blue-800">
+              You have {formatCurrency(availableCredit)} credit available
+            </p>
+            <p className="text-xs text-blue-500 mt-0.5">
+              Expand any expense card below and click <span className="font-semibold">Apply credit</span> on your pending shares.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── EXPENSE GROUPS BY DATE ── */}
       {expenseGroups.map(({ label, expenses: dayExps }) => (
@@ -296,7 +339,18 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                         const name = memberMap.get(p.userId) ?? "Unknown";
                         const isMe = p.userId === currentUserId;
                         const isPayer = p.userId === exp.paidBy;
-                        const status = expStatuses?.get(p.userId);
+                        const computedStatus = expStatuses?.get(p.userId);
+                        // If credit was explicitly applied (stored in DB), override status
+                        const status = p.creditApplied > 0
+                          ? { kind: "AUTO_CREDIT" as const, remainingCredit: 0 }
+                          : computedStatus;
+
+                        const canApplyCredit =
+                          isMe &&
+                          !isPayer &&
+                          p.creditApplied === 0 &&
+                          status?.kind === "PENDING" &&
+                          availableCredit > 0;
 
                         return (
                           <div key={p.userId} className="flex items-center justify-between">
@@ -320,6 +374,19 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                                 <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
                                   <Sparkles className="h-3.5 w-3.5" /> Auto-credit
                                 </span>
+                              ) : canApplyCredit ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                                    <Clock className="h-3.5 w-3.5" /> Pending
+                                  </span>
+                                  <button
+                                    onClick={() => handleApplyCredit(p.id)}
+                                    disabled={applyingCredit === p.id}
+                                    className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                  >
+                                    {applyingCredit === p.id ? "Applying…" : "✦ Apply credit"}
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
                                   <Clock className="h-3.5 w-3.5" /> Pending
