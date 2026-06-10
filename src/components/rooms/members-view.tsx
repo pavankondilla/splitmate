@@ -5,11 +5,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { ArrowRight, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, Trash2, Sparkles } from "lucide-react";
 import { RemoveRoomMemberDialog } from "./remove-room-member-dialog";
 
 interface Member { id: string; name: string; email: string; role: string; joinedAt: string }
-interface Participant { userId: string; shareAmount: number }
+interface Participant { id: string; userId: string; shareAmount: number; creditApplied: number }
 interface Expense { id: string; title: string; amount: number; category: string; paidBy: string; expenseDate: string; participants: Participant[] }
 interface Settlement { id: string; payerId: string; payeeId: string; amount: number; note: string | null; settledAt: string }
 
@@ -29,7 +29,7 @@ function initials(name: string) {
 
 type HistoryItem =
   | { type: "expense_paid"; title: string; amount: number; date: string }
-  | { type: "expense_share"; title: string; shareAmount: number; paidByName: string; date: string }
+  | { type: "expense_share"; title: string; shareAmount: number; creditApplied: number; paidByName: string; date: string }
   | { type: "settlement_paid"; toName: string; amount: number; note: string | null; date: string }
   | { type: "settlement_received"; fromName: string; amount: number; note: string | null; date: string };
 
@@ -66,6 +66,7 @@ export function MembersView({ roomId, members, expenses, settlements, balances, 
             type: "expense_share",
             title: exp.title,
             shareAmount: share.shareAmount,
+            creditApplied: share.creditApplied,
             paidByName: memberMap.get(exp.paidBy) ?? "Unknown",
             date: exp.expenseDate,
           });
@@ -140,7 +141,8 @@ export function MembersView({ roomId, members, expenses, settlements, balances, 
                 {history.length === 0 ? (
                   <p className="text-sm text-gray-400 py-2">No transactions yet.</p>
                 ) : (
-                  history.map((item, i) => (
+                  <>
+                  {history.map((item, i) => (
                     <div key={i} className="flex items-start justify-between gap-2 text-sm py-1.5 border-b border-gray-100 last:border-0">
                       <div className="flex-1 min-w-0">
                         {item.type === "expense_paid" && (
@@ -151,7 +153,14 @@ export function MembersView({ roomId, members, expenses, settlements, balances, 
                         )}
                         {item.type === "expense_share" && (
                           <>
-                            <span className="font-medium text-gray-900">Share of {item.title}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium text-gray-900">Share of {item.title}</span>
+                              {item.creditApplied > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                  <Sparkles className="h-3 w-3" /> Auto-credited
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-400">{formatDate(item.date)} · paid by {item.paidByName}</p>
                           </>
                         )}
@@ -182,12 +191,32 @@ export function MembersView({ roomId, members, expenses, settlements, balances, 
                         "text-emerald-600"
                       }`}>
                         {item.type === "expense_paid" && `+${formatCurrency(item.amount)}`}
-                        {item.type === "expense_share" && `-${formatCurrency(item.shareAmount)}`}
+                        {item.type === "expense_share" && (
+                          item.creditApplied > 0
+                            ? <span className="text-blue-500">✦ {formatCurrency(item.creditApplied)}</span>
+                            : `-${formatCurrency(item.shareAmount)}`
+                        )}
                         {item.type === "settlement_paid" && `-${formatCurrency(item.amount)}`}
                         {item.type === "settlement_received" && `+${formatCurrency(item.amount)}`}
                       </span>
                     </div>
-                  ))
+                  ))}
+                  {/* Credit summary at bottom of history */}
+                  {(() => {
+                    const totalCredited = history
+                      .filter((h) => h.type === "expense_share" && h.creditApplied > 0)
+                      .reduce((sum, h) => sum + (h.type === "expense_share" ? h.creditApplied : 0), 0);
+                    if (totalCredited === 0) return null;
+                    return (
+                      <div className="mt-2 pt-2 border-t border-blue-100 flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1 text-blue-500 font-semibold">
+                          <Sparkles className="h-3 w-3" /> Total auto-credited
+                        </span>
+                        <span className="font-bold text-blue-600">{formatCurrency(totalCredited)}</span>
+                      </div>
+                    );
+                  })()}
+                  </>
                 )}
               </div>
             )}

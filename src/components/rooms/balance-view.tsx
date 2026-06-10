@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatCurrency } from "@/lib/format";
-import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, Sparkles } from "lucide-react";
 import { RecordSettlementDialog } from "./record-settlement-dialog";
 
 interface Balance {
@@ -43,6 +44,17 @@ function initials(name: string) {
 export function BalanceView({ roomId, balances, pairwise, members, currentUserId }: BalanceViewProps) {
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }));
   const memberEmailMap = new Map(members.map((m) => [m.id, m.email]));
+
+  const [availableCredit, setAvailableCredit] = useState(0);
+  useEffect(() => {
+    fetch(`/api/rooms/${roomId}/credits`)
+      .then((r) => r.json())
+      .then((credits: Array<{ totalCredit: number; usedCredit: number }>) => {
+        const total = credits.reduce((sum, c) => sum + (c.totalCredit - c.usedCredit), 0);
+        setAvailableCredit(total);
+      })
+      .catch(() => {});
+  }, [roomId]);
 
   const myBalance = balances.find((b) => b.userId === currentUserId);
   const myNet = myBalance?.netBalance ?? 0;
@@ -122,6 +134,12 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
             <div className="flex items-center gap-1.5 text-emerald-500 font-medium">
               <TrendingUp className="h-3.5 w-3.5" />
               <span>{myCredits.length} awaiting payment</span>
+            </div>
+          )}
+          {availableCredit > 0 && (
+            <div className="flex items-center gap-1.5 text-blue-500 font-medium">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>{formatCurrency(availableCredit)} credit available</span>
             </div>
           )}
           {myNet === 0 && (
