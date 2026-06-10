@@ -56,10 +56,6 @@ function getDateLabel(dateStr: string): string {
   return formatDate(dateStr);
 }
 
-// Running-balance algorithm: determines per-participant status for each expense
-// AUTO_CREDIT = covered by prior overpayment credit
-// SETTLED     = manually settled after the expense
-// PENDING     = not yet settled
 function computeStatuses(
   expenses: Expense[],
   settlements: Settlement[]
@@ -134,8 +130,6 @@ function computeStatuses(
   return result;
 }
 
-// Computes current net credit for each (payer → participant) pair
-// Positive value = participant has overpaid and has credit with that payer
 function computeCredits(
   expenses: Expense[],
   settlements: Settlement[]
@@ -164,27 +158,21 @@ function computeCredits(
   return credit;
 }
 
-type FeedItem =
-  | { type: "expense"; data: Expense; date: string }
-  | { type: "settlement"; data: Settlement; date: string };
+type DateGroup = {
+  label: string;
+  expenses: Expense[];
+  settlements: Settlement[];
+};
 
 export function ExpenseList({ roomId, expenses, settlements, members, currentUserId, currentUserRole }: ExpenseListProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
+  const [expandedSettlements, setExpandedSettlements] = useState<Set<string>>(new Set());
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
   const statusMap = useMemo(() => computeStatuses(expenses, settlements), [expenses, settlements]);
   const creditMap = useMemo(() => computeCredits(expenses, settlements), [expenses, settlements]);
-
-  const feed: FeedItem[] = useMemo(
-    () =>
-      [
-        ...expenses.map((e) => ({ type: "expense" as const, data: e, date: e.expenseDate })),
-        ...settlements.map((s) => ({ type: "settlement" as const, data: s, date: s.settledAt })),
-      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [expenses, settlements]
-  );
 
   async function handleDelete(expenseId: string) {
     setDeleting(expenseId);
@@ -197,7 +185,7 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
   }
 
   function toggleExpand(expId: string) {
-    setExpanded((prev) => {
+    setExpandedExpenses((prev) => {
       const next = new Set(prev);
       if (next.has(expId)) next.delete(expId);
       else next.add(expId);
@@ -205,7 +193,16 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
     });
   }
 
-  if (feed.length === 0) {
+  function toggleSettlements(dateKey: string) {
+    setExpandedSettlements((prev) => {
+      const next = new Set(prev);
+      if (next.has(dateKey)) next.delete(dateKey);
+      else next.add(dateKey);
+      return next;
+    });
+  }
+
+  if (expenses.length === 0 && settlements.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
@@ -216,193 +213,245 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
     );
   }
 
-  // Group by date label (feed is already sorted descending)
-  const groups: { label: string; items: FeedItem[] }[] = [];
-  for (const item of feed) {
-    const label = getDateLabel(item.date);
-    const last = groups[groups.length - 1];
-    if (last?.label === label) last.items.push(item);
-    else groups.push({ label, items: [item] });
+  // Group expenses and settlements by date
+  const dateGroups: Map<string, DateGroup> = new Map();
+
+  for (const exp of expenses) {
+    const dateLabel = getDateLabel(exp.expenseDate);
+    if (!dateGroups.has(dateLabel)) {
+      dateGroups.set(dateLabel, { label: dateLabel, expenses: [], settlements: [] });
+    }
+    dateGroups.get(dateLabel)!.expenses.push(exp);
   }
+
+  for (const settlement of settlements) {
+    const dateLabel = getDateLabel(settlement.settledAt);
+    if (!dateGroups.has(dateLabel)) {
+      dateGroups.set(dateLabel, { label: dateLabel, expenses: [], settlements: [] });
+    }
+    dateGroups.get(dateLabel)!.settlements.push(settlement);
+  }
+
+  // Sort groups by date descending
+  const sortedGroups = Array.from(dateGroups.values()).sort((a, b) => {
+    const aDate = new Date(a.expenses[0]?.expenseDate ?? a.settlements[0]?.settledAt ?? "");
+    const bDate = new Date(b.expenses[0]?.expenseDate ?? b.settlements[0]?.settledAt ?? "");
+    return bDate.getTime() - aDate.getTime();
+  });
 
   return (
     <div className="space-y-6">
-      {groups.map(({ label, items }) => (
+      {sortedGroups.map(({ label, expenses: dayExpenses, settlements: daySettlements }) => (
         <div key={label}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">{label}</p>
+
           <div className="space-y-3">
-            {items.map((item) => {
-              if (item.type === "settlement") {
-                const s = item.data;
-                const payerName = memberMap.get(s.payerId) ?? "Unknown";
-                const payeeName = memberMap.get(s.payeeId) ?? "Unknown";
-                const isMyPayment = s.payerId === currentUserId;
-                const isMyReceipt = s.payeeId === currentUserId;
-                return (
-                  <div key={`set-${s.id}`} className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-2xl shrink-0">💳</span>
-                        <div className="min-w-0">
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                            Settlement
-                          </span>
-                          <div className="flex items-center gap-1.5 mt-1 text-sm font-medium text-gray-800">
-                            <span className="truncate">{isMyPayment ? "You" : payerName}</span>
-                            <ArrowRight className="h-3 w-3 text-gray-400 shrink-0" />
-                            <span className="truncate">{isMyReceipt ? "You" : payeeName}</span>
-                          </div>
-                          {s.note && <p className="text-xs text-gray-500 mt-0.5 truncate">{s.note}</p>}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-bold text-emerald-700">{formatCurrency(s.amount)}</p>
-                        <p className="text-xs text-gray-400">{formatDate(s.settledAt)}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
+            {/* ── EXPENSES SECTION ── */}
+            {dayExpenses.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 px-1 mb-2">
+                  <span className="text-sm font-bold text-blue-600">📊 EXPENSES</span>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
+                    {dayExpenses.length}
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {dayExpenses.map((exp) => {
+                    const cat = CATEGORY_CONFIG[exp.category] ?? CATEGORY_CONFIG.OTHER;
+                    const paidByName = memberMap.get(exp.paidBy) ?? "Unknown";
+                    const iAmPayer = exp.paidBy === currentUserId;
+                    const myParticipant = exp.participants.find((p) => p.userId === currentUserId);
+                    const myShare = myParticipant?.shareAmount;
+                    const canDelete = exp.createdBy === currentUserId;
+                    const isExpanded = expandedExpenses.has(exp.id);
+                    const expStatuses = statusMap.get(exp.id);
 
-              const exp = item.data;
-              const cat = CATEGORY_CONFIG[exp.category] ?? CATEGORY_CONFIG.OTHER;
-              const paidByName = memberMap.get(exp.paidBy) ?? "Unknown";
-              const iAmPayer = exp.paidBy === currentUserId;
-              const myParticipant = exp.participants.find((p) => p.userId === currentUserId);
-              const myShare = myParticipant?.shareAmount;
-              const canDelete = exp.createdBy === currentUserId;
-              const isExpanded = expanded.has(exp.id);
-              const expStatuses = statusMap.get(exp.id);
-
-              return (
-                <div key={`exp-${exp.id}`} className={`rounded-xl border ${cat.cardBg} overflow-hidden`}>
-                  <div className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <span className="text-2xl leading-none mt-0.5 shrink-0">{cat.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-900 truncate">{exp.title}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${cat.badgeBg} ${cat.badgeText}`}>
-                              {exp.category}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-500 mt-0.5">
-                            Paid by{" "}
-                            <span className="font-medium text-gray-700">{iAmPayer ? "You" : paidByName}</span>
-                            <span className="mx-1">·</span>
-                            {formatDate(exp.expenseDate)}
-                          </p>
-                          {myShare !== undefined && !iAmPayer && (
-                            <div className="mt-2 inline-flex items-center text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg">
-                              Your share: {formatCurrency(myShare)}
-                            </div>
-                          )}
-                          {iAmPayer && (
-                            <div className="mt-2 inline-flex items-center text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
-                              You paid
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-1 shrink-0">
-                        <p className="font-bold text-gray-900 text-lg leading-none">{formatCurrency(exp.amount)}</p>
-                        {canDelete && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-gray-400 hover:text-rose-500 -mt-0.5 ml-1"
-                            onClick={() => handleDelete(exp.id)}
-                            disabled={deleting === exp.id}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => toggleExpand(exp.id)}
-                      className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      {isExpanded ? "Hide split details" : `View split details (${exp.participants.length} members)`}
-                    </button>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="border-t border-black/5 bg-white/60 px-4 py-3 space-y-2.5">
-                      {exp.participants.map((p) => {
-                        const name = memberMap.get(p.userId) ?? "Unknown";
-                        const isMe = p.userId === currentUserId;
-                        const isPayer = p.userId === exp.paidBy;
-                        const status = expStatuses?.get(p.userId);
-
-                        return (
-                          <div key={p.userId} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                              <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0">
-                                {name[0]?.toUpperCase()}
+                    return (
+                      <div key={`exp-${exp.id}`} className={`rounded-xl border ${cat.cardBg} overflow-hidden`}>
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <span className="text-2xl leading-none mt-0.5 shrink-0">{cat.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-gray-900 truncate">{exp.title}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${cat.badgeBg} ${cat.badgeText}`}>
+                                    {exp.category}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-500 mt-0.5">
+                                  Paid by{" "}
+                                  <span className="font-medium text-gray-700">{iAmPayer ? "You" : paidByName}</span>
+                                  <span className="mx-1">·</span>
+                                  {formatDate(exp.expenseDate)}
+                                </p>
+                                {myShare !== undefined && !iAmPayer && (
+                                  <div className="mt-2 inline-flex items-center text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg">
+                                    Your share: {formatCurrency(myShare)}
+                                  </div>
+                                )}
+                                {iAmPayer && (
+                                  <div className="mt-2 inline-flex items-center text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
+                                    You paid
+                                  </div>
+                                )}
                               </div>
-                              <span className={`text-sm ${isMe ? "font-semibold text-gray-900" : "text-gray-700"}`}>
-                                {isMe ? "You" : name}
-                              </span>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium text-gray-900">{formatCurrency(p.shareAmount)}</span>
-                              {isPayer ? (
-                                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                                  Paid
-                                </span>
-                              ) : status?.kind === "SETTLED" ? (
-                                <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> Settled
-                                </span>
-                              ) : status?.kind === "AUTO_CREDIT" ? (
-                                <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
-                                  <Sparkles className="h-3.5 w-3.5" /> Auto-credit
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
-                                  <Clock className="h-3.5 w-3.5" /> Pending
-                                </span>
+                            <div className="flex items-start gap-1 shrink-0">
+                              <p className="font-bold text-gray-900 text-lg leading-none">{formatCurrency(exp.amount)}</p>
+                              {canDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-gray-400 hover:text-rose-500 -mt-0.5 ml-1"
+                                  onClick={() => handleDelete(exp.id)}
+                                  disabled={deleting === exp.id}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
                               )}
                             </div>
                           </div>
-                        );
-                      })}
 
-                      {/* Credit summary — show participants who have overpaid */}
-                      {(() => {
-                        const payerCredits = creditMap.get(exp.paidBy);
-                        const creditHolders = exp.participants
-                          .filter((p) => p.userId !== exp.paidBy)
-                          .map((p) => ({ userId: p.userId, credit: payerCredits?.get(p.userId) ?? 0 }))
-                          .filter((c) => c.credit > 0);
+                          <button
+                            onClick={() => toggleExpand(exp.id)}
+                            className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            {isExpanded ? "Hide split details" : `View split details (${exp.participants.length} members)`}
+                          </button>
+                        </div>
 
-                        if (creditHolders.length === 0) return null;
+                        {isExpanded && (
+                          <div className="border-t border-black/5 bg-white/60 px-4 py-3 space-y-2.5">
+                            {exp.participants.map((p) => {
+                              const name = memberMap.get(p.userId) ?? "Unknown";
+                              const isMe = p.userId === currentUserId;
+                              const isPayer = p.userId === exp.paidBy;
+                              const status = expStatuses?.get(p.userId);
 
-                        return (
-                          <div className="border-t border-blue-100 pt-2.5 mt-0.5">
-                            <p className="text-xs text-blue-500 font-semibold mb-2">💰 Credit summary</p>
-                            {creditHolders.map((c) => (
-                              <div key={c.userId} className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-blue-700">
-                                  {c.userId === currentUserId ? "You" : (memberMap.get(c.userId) ?? "Unknown")}
-                                </span>
-                                <span className="text-xs font-semibold text-blue-700">
-                                  {formatCurrency(c.credit)} credit remaining
-                                </span>
-                              </div>
-                            ))}
+                              return (
+                                <div key={p.userId} className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0">
+                                      {name[0]?.toUpperCase()}
+                                    </div>
+                                    <span className={`text-sm ${isMe ? "font-semibold text-gray-900" : "text-gray-700"}`}>
+                                      {isMe ? "You" : name}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-gray-900">{formatCurrency(p.shareAmount)}</span>
+                                    {isPayer ? (
+                                      <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                        Paid
+                                      </span>
+                                    ) : status?.kind === "SETTLED" ? (
+                                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> Settled
+                                      </span>
+                                    ) : status?.kind === "AUTO_CREDIT" ? (
+                                      <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
+                                        <Sparkles className="h-3.5 w-3.5" /> Auto-credit
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                                        <Clock className="h-3.5 w-3.5" /> Pending
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {(() => {
+                              const payerCredits = creditMap.get(exp.paidBy);
+                              const creditHolders = exp.participants
+                                .filter((p) => p.userId !== exp.paidBy)
+                                .map((p) => ({ userId: p.userId, credit: payerCredits?.get(p.userId) ?? 0 }))
+                                .filter((c) => c.credit > 0);
+
+                              if (creditHolders.length === 0) return null;
+
+                              return (
+                                <div className="border-t border-blue-100 pt-2.5 mt-0.5">
+                                  <p className="text-xs text-blue-500 font-semibold mb-2">💰 Credit summary</p>
+                                  {creditHolders.map((c) => (
+                                    <div key={c.userId} className="flex items-center justify-between">
+                                      <span className="text-xs font-medium text-blue-700">
+                                        {c.userId === currentUserId ? "You" : (memberMap.get(c.userId) ?? "Unknown")}
+                                      </span>
+                                      <span className="text-xs font-semibold text-blue-700">
+                                        {formatCurrency(c.credit)} credit remaining
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
-                        );
-                      })()}
-                    </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── SETTLEMENTS SECTION ── */}
+            <div>
+              <button
+                onClick={() => toggleSettlements(label)}
+                className="flex items-center gap-2 px-1 py-1.5 rounded transition-colors hover:bg-gray-50 w-full"
+              >
+                <span className="text-sm font-bold text-emerald-600">💳 SETTLEMENTS</span>
+                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
+                  {daySettlements.length}
+                </span>
+                <span className="ml-auto text-xs text-gray-400">
+                  {expandedSettlements.has(label) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </span>
+              </button>
+
+              {expandedSettlements.has(label) && (
+                <div className="space-y-2 mt-2">
+                  {daySettlements.length === 0 ? (
+                    <p className="text-xs text-gray-400 px-1 py-2">No settlements on this date</p>
+                  ) : (
+                    daySettlements.map((s) => {
+                      const payerName = memberMap.get(s.payerId) ?? "Unknown";
+                      const payeeName = memberMap.get(s.payeeId) ?? "Unknown";
+                      const isMyPayment = s.payerId === currentUserId;
+                      const isMyReceipt = s.payeeId === currentUserId;
+
+                      return (
+                        <div key={`set-${s.id}`} className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-2xl shrink-0">💳</span>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                                <span className="truncate">{isMyPayment ? "You" : payerName}</span>
+                                <ArrowRight className="h-3 w-3 text-gray-400 shrink-0" />
+                                <span className="truncate">{isMyReceipt ? "You" : payeeName}</span>
+                              </div>
+                              {s.note && <p className="text-xs text-gray-500 mt-0.5 truncate">{s.note}</p>}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-bold text-emerald-700">{formatCurrency(s.amount)}</p>
+                              <p className="text-xs text-gray-400">{formatDate(s.settledAt)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
-              );
-            })}
+              )}
+
+              {!expandedSettlements.has(label) && daySettlements.length === 0 && (
+                <p className="text-xs text-gray-400 px-1 py-2">(No settlements on this date)</p>
+              )}
+            </div>
           </div>
         </div>
       ))}
