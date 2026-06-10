@@ -15,14 +15,23 @@ interface RecordSettlementDialogProps {
   roomId: string;
   members: Member[];
   currentUserId: string;
+  prefillPayeeId?: string;
+  prefillAmount?: number; // in paise
+  triggerLabel?: string;
+  triggerClassName?: string;
 }
 
-export function RecordSettlementDialog({ roomId, members, currentUserId }: RecordSettlementDialogProps) {
+export function RecordSettlementDialog({ roomId, members, currentUserId, prefillPayeeId, prefillAmount, triggerLabel, triggerClassName }: RecordSettlementDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ payerId: currentUserId, payeeId: "", amount: "", note: "" });
+  const [form, setForm] = useState({
+    payerId: currentUserId,
+    payeeId: prefillPayeeId ?? "",
+    amount: prefillAmount ? (prefillAmount / 100).toString() : "",
+    note: "",
+  });
   const memberMap = new Map(members.map((m) => [m.id, m.name]));
 
   async function handleSubmit(e: React.FormEvent) {
@@ -55,8 +64,8 @@ export function RecordSettlementDialog({ roomId, members, currentUserId }: Recor
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className="gap-2">
-        <CheckCircle className="h-4 w-4" /> Record Settlement
+      <Button variant="outline" onClick={() => setOpen(true)} className={triggerClassName ?? "gap-2"}>
+        <CheckCircle className="h-4 w-4" /> {triggerLabel ?? "Record Settlement"}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">

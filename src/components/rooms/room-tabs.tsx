@@ -44,7 +44,7 @@ export function RoomTabs({ roomId, members, expenses, settlements, balances, pai
       </TabsContent>
 
       <TabsContent value="balances">
-        <BalanceView balances={balances} pairwise={pairwise} currentUserId={currentUserId} />
+        <BalanceView roomId={roomId} balances={balances} pairwise={pairwise} members={members} currentUserId={currentUserId} />
       </TabsContent>
 
       <TabsContent value="members">
