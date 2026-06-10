@@ -15,6 +15,13 @@
       "when": 1781074031877,
       "tag": "0001_add_removed_by_to_room_members",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781119828404,
+      "tag": "0002_foamy_pet_avengers",
+      "breakpoints": true
     }
   ]
 }

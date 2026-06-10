@@ -5,3 +5,4 @@ export * from "./expenses";
 export * from "./expense-participants";
 export * from "./settlements";
 export * from "./activity-logs";
+export * from "./user-credits";
