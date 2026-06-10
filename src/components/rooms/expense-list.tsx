@@ -36,7 +36,10 @@ interface ExpenseListProps {
   currentUserRole: string;
 }
 
-type ParticipantStatus = { kind: "PENDING" } | { kind: "SETTLED" } | { kind: "AUTO_CREDIT" };
+type ParticipantStatus =
+  | { kind: "PENDING" }
+  | { kind: "SETTLED" }
+  | { kind: "AUTO_CREDIT"; remainingCredit: number }; // pool value after this expense was auto-credited
 
 const CATEGORY_CONFIG: Record<string, { icon: string; cardBg: string; badgeBg: string; badgeText: string }> = {
   RENT:      { icon: "🏠", cardBg: "bg-violet-50 border-violet-100",  badgeBg: "bg-violet-100",  badgeText: "text-violet-700"  },
@@ -103,8 +106,8 @@ function computeStatuses(
         if (!result.has(event.expId)) result.set(event.expId, new Map());
         const expMap = result.get(event.expId)!;
         if (pool >= event.share) {
-          expMap.set(participantId, { kind: "AUTO_CREDIT" });
           pool -= event.share;
+          expMap.set(participantId, { kind: "AUTO_CREDIT", remainingCredit: pool });
         } else {
           expMap.set(participantId, { kind: "PENDING" });
           pending.push({ expId: event.expId, remaining: event.share - pool });
@@ -130,34 +133,6 @@ function computeStatuses(
   return result;
 }
 
-function computeCredits(
-  expenses: Expense[],
-  settlements: Settlement[]
-): Map<string, Map<string, number>> {
-  const credit = new Map<string, Map<string, number>>();
-
-  function getMap(payerId: string) {
-    if (!credit.has(payerId)) credit.set(payerId, new Map());
-    return credit.get(payerId)!;
-  }
-
-  for (const exp of expenses) {
-    const map = getMap(exp.paidBy);
-    for (const p of exp.participants) {
-      if (p.userId !== exp.paidBy) {
-        map.set(p.userId, (map.get(p.userId) ?? 0) - p.shareAmount);
-      }
-    }
-  }
-
-  for (const s of settlements) {
-    const map = getMap(s.payeeId);
-    map.set(s.payerId, (map.get(s.payerId) ?? 0) + s.amount);
-  }
-
-  return credit;
-}
-
 type DateGroup = {
   label: string;
   expenses: Expense[];
@@ -172,7 +147,6 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
   const statusMap = useMemo(() => computeStatuses(expenses, settlements), [expenses, settlements]);
-  const creditMap = useMemo(() => computeCredits(expenses, settlements), [expenses, settlements]);
 
   async function handleDelete(expenseId: string) {
     setDeleting(expenseId);
@@ -365,24 +339,31 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                             })}
 
                             {(() => {
-                              const payerCredits = creditMap.get(exp.paidBy);
+                              // Only show credit summary on AUTO_CREDIT cards.
+                              // Use the remainingCredit stored at the exact moment the
+                              // auto-credit was applied — not the current overall balance.
                               const creditHolders = exp.participants
                                 .filter((p) => p.userId !== exp.paidBy)
-                                .map((p) => ({ userId: p.userId, credit: payerCredits?.get(p.userId) ?? 0 }))
-                                .filter((c) => c.credit > 0);
+                                .flatMap((p) => {
+                                  const s = expStatuses?.get(p.userId);
+                                  if (s?.kind === "AUTO_CREDIT" && s.remainingCredit > 0) {
+                                    return [{ userId: p.userId, credit: s.remainingCredit }];
+                                  }
+                                  return [];
+                                });
 
                               if (creditHolders.length === 0) return null;
 
                               return (
                                 <div className="border-t border-blue-100 pt-2.5 mt-0.5">
-                                  <p className="text-xs text-blue-500 font-semibold mb-2">💰 Credit summary</p>
+                                  <p className="text-xs text-blue-500 font-semibold mb-2">💰 Credit remaining</p>
                                   {creditHolders.map((c) => (
                                     <div key={c.userId} className="flex items-center justify-between">
                                       <span className="text-xs font-medium text-blue-700">
                                         {c.userId === currentUserId ? "You" : (memberMap.get(c.userId) ?? "Unknown")}
                                       </span>
                                       <span className="text-xs font-semibold text-blue-700">
-                                        {formatCurrency(c.credit)} credit remaining
+                                        {formatCurrency(c.credit)} after this expense
                                       </span>
                                     </div>
                                   ))}
