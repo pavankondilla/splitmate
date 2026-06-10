@@ -8,6 +8,13 @@
       "when": 1780423560244,
       "tag": "0000_jazzy_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781074031877,
+      "tag": "0001_add_removed_by_to_room_members",
+      "breakpoints": true
     }
   ]
 }

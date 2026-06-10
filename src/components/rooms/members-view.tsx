@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { RemoveRoomMemberDialog } from "./remove-room-member-dialog";
 
 interface Member { id: string; name: string; email: string; role: string; joinedAt: string }
 interface Participant { userId: string; shareAmount: number }
@@ -12,11 +14,13 @@ interface Expense { id: string; title: string; amount: number; category: string;
 interface Settlement { id: string; payerId: string; payeeId: string; amount: number; note: string | null; settledAt: string }
 
 interface MembersViewProps {
+  roomId: string;
   members: Member[];
   expenses: Expense[];
   settlements: Settlement[];
   balances: Array<{ userId: string; userName: string; userAvatar: string | null; netBalance: number }>;
   currentUserId: string;
+  currentUserRole: string;
 }
 
 function initials(name: string) {
@@ -29,10 +33,25 @@ type HistoryItem =
   | { type: "settlement_paid"; toName: string; amount: number; note: string | null; date: string }
   | { type: "settlement_received"; fromName: string; amount: number; note: string | null; date: string };
 
-export function MembersView({ members, expenses, settlements, balances, currentUserId }: MembersViewProps) {
+export function MembersView({ roomId, members, expenses, settlements, balances, currentUserId, currentUserRole }: MembersViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const memberMap = new Map(members.map((m) => [m.id, m.name]));
   const balanceMap = new Map(balances.map((b) => [b.userId, b.netBalance]));
+
+  function getUnsettledExpensesCount(memberId: string): number {
+    return expenses.filter((exp) => {
+      const participant = exp.participants.find((p) => p.userId === memberId);
+      if (!participant) return false;
+
+      const settlement = settlements.find((s) =>
+        (s.payerId === memberId && s.payeeId === exp.paidBy) ||
+        (s.payeeId === memberId && s.payerId === exp.paidBy)
+      );
+
+      return !settlement || settlement.amount < participant.shareAmount;
+    }).length;
+  }
 
   function getMemberHistory(memberId: string): HistoryItem[] {
     const items: HistoryItem[] = [];
@@ -98,6 +117,19 @@ export function MembersView({ members, expenses, settlements, balances, currentU
                 <span className={`text-sm font-semibold ${balance > 0 ? "text-emerald-600" : balance < 0 ? "text-rose-600" : "text-gray-400"}`}>
                   {balance === 0 ? "Settled" : balance > 0 ? `+${formatCurrency(balance)}` : `-${formatCurrency(Math.abs(balance))}`}
                 </span>
+                {!isYou && currentUserRole === "admin" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-gray-400 hover:text-rose-600"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRemovingMemberId(m.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
                 {isOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
               </div>
             </button>
@@ -162,6 +194,18 @@ export function MembersView({ members, expenses, settlements, balances, currentU
           </div>
         );
       })}
+
+      {removingMemberId && (
+        <RemoveRoomMemberDialog
+          roomId={roomId}
+          memberId={removingMemberId}
+          memberName={memberMap.get(removingMemberId) ?? "Unknown"}
+          memberBalance={balanceMap.get(removingMemberId) ?? 0}
+          unsettledCount={getUnsettledExpensesCount(removingMemberId)}
+          isOpen={!!removingMemberId}
+          onOpenChange={(open) => !open && setRemovingMemberId(null)}
+        />
+      )}
     </div>
   );
 }

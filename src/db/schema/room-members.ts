@@ -15,6 +15,8 @@ export const roomMembers = pgTable("room_members", {
   role: roomRoleEnum("role").default("member").notNull(),
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
+  removedBy: uuid("removed_by")
+    .references(() => users.id),
 });
 
 export type RoomMember = typeof roomMembers.$inferSelect;

@@ -3,6 +3,7 @@ import { ForbiddenError, NotFoundError, ConflictError } from "@/lib/errors";
 import * as roomRepo from "@/repositories/room.repository";
 import * as userRepo from "@/repositories/user.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
+import { getRoomBalances } from "@/services/balance.service";
 
 function generateInviteCode(): string {
   return randomBytes(4).toString("hex").toUpperCase();
@@ -84,5 +85,40 @@ export async function leaveRoom(roomId: string, userId: string) {
     entityType: "room",
     entityId: roomId,
     metadata: { userId },
+  });
+}
+
+export async function removeMember(roomId: string, memberIdToRemove: string, adminUserId: string) {
+  const room = await roomRepo.findRoomById(roomId);
+  if (!room) throw new NotFoundError("Room");
+
+  const adminMembership = await roomRepo.findRoomMember(roomId, adminUserId);
+  if (!adminMembership || adminMembership.role !== "admin") throw new ForbiddenError("Only admins can remove members");
+
+  if (adminUserId === memberIdToRemove) throw new ConflictError("Cannot remove yourself");
+
+  const memberToRemove = await roomRepo.findRoomMember(roomId, memberIdToRemove);
+  if (!memberToRemove) throw new NotFoundError("Member");
+
+  const balances = await getRoomBalances(roomId, memberIdToRemove);
+  const memberBalance = balances.find((b) => b.userId === memberIdToRemove);
+  if (memberBalance && memberBalance.netBalance < 0) {
+    throw new ConflictError("Member must settle debts before removal");
+  }
+
+  const memberUser = await userRepo.findUserById(memberIdToRemove);
+  await roomRepo.removeRoomMember(roomId, memberIdToRemove, adminUserId);
+
+  await logActivity({
+    roomId,
+    actorId: adminUserId,
+    action: "MEMBER_REMOVED",
+    entityType: "room",
+    entityId: roomId,
+    metadata: {
+      removedMemberId: memberIdToRemove,
+      removedMemberName: memberUser?.name ?? "Unknown",
+      removedMemberEmail: memberUser?.email ?? "Unknown",
+    },
   });
 }

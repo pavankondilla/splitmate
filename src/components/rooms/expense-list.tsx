@@ -239,7 +239,7 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
               const iAmPayer = exp.paidBy === currentUserId;
               const myParticipant = exp.participants.find((p) => p.userId === currentUserId);
               const myShare = myParticipant?.shareAmount;
-              const canDelete = exp.createdBy === currentUserId || currentUserRole === "admin";
+              const canDelete = exp.createdBy === currentUserId;
               const isExpanded = expanded.has(exp.id);
               const expStatuses = statusMap.get(exp.id);
 

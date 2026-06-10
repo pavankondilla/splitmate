@@ -48,7 +48,7 @@ export function RoomTabs({ roomId, members, expenses, settlements, balances, pai
       </TabsContent>
 
       <TabsContent value="members">
-        <MembersView members={members} expenses={expenses} settlements={settlements} balances={balances} currentUserId={currentUserId} />
+        <MembersView roomId={roomId} members={members} expenses={expenses} settlements={settlements} balances={balances} currentUserId={currentUserId} currentUserRole={currentUserRole} />
       </TabsContent>
     </Tabs>
   );

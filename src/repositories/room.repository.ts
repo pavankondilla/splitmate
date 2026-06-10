@@ -85,3 +85,12 @@ export async function softDeleteRoomMember(roomId: string, userId: string) {
     .returning();
   return result[0] ?? null;
 }
+
+export async function removeRoomMember(roomId: string, userId: string, removedByUserId: string) {
+  const result = await db
+    .update(roomMembers)
+    .set({ deletedAt: new Date(), removedBy: removedByUserId })
+    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
+    .returning();
+  return result[0] ?? null;
+}
