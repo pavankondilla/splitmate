@@ -20,6 +20,19 @@ export async function findCreditsByUserAndRoom(userId: string, roomId: string) {
     );
 }
 
+export async function findCreditsByUserRoomAndOwedBy(userId: string, roomId: string, owedByUserId: string) {
+  return db
+    .select()
+    .from(userCredits)
+    .where(
+      and(
+        eq(userCredits.userId, userId),
+        eq(userCredits.roomId, roomId),
+        eq(userCredits.owedByUserId, owedByUserId)
+      )
+    );
+}
+
 export async function findCreditsByRoom(roomId: string) {
   return db
     .select()

@@ -35,10 +35,17 @@ export async function detectAndCreateCredit(
   const overpayment = totalPaid - totalOwed;
   if (overpayment <= 0) return null;
 
+  // Only create credit for the DELTA above existing credit records for this pair.
+  // Prevents duplicate records when multiple settlements occur over time.
+  const existingCredits = await creditRepo.findCreditsByUserRoomAndOwedBy(payerId, roomId, payeeId);
+  const existingTotal = existingCredits.reduce((sum, c) => sum + c.totalCredit, 0);
+  const delta = overpayment - existingTotal;
+  if (delta <= 0) return null;
+
   const credit = await creditRepo.createCredit({
     userId: payerId,
     roomId,
-    totalCredit: overpayment,
+    totalCredit: delta,
     usedCredit: 0,
     sourceSettlementId: settlementId,
     owedByUserId: payeeId,

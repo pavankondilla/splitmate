@@ -3,6 +3,7 @@ import * as expenseRepo from "@/repositories/expense.repository";
 import * as settlementRepo from "@/repositories/settlement.repository";
 import * as roomRepo from "@/repositories/room.repository";
 import * as userRepo from "@/repositories/user.repository";
+import * as creditRepo from "@/repositories/credit.repository";
 import type { Balance, PairwiseBalance } from "@/types/domain";
 import { computeNetBalance } from "@/lib/balance";
 
@@ -72,16 +73,26 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
     pairDebts.get(payerId)!.set(participantId, amount);
   };
 
-  // Accumulate expense shares per pair
+  // Accumulate expense shares per pair — use effective share (minus any credit applied)
   for (const p of participants) {
     const payerId = expensePaidByMap.get(p.expenseId);
     if (!payerId || p.userId === payerId) continue;
-    setDebt(payerId, p.userId, getDebt(payerId, p.userId) + p.shareAmount);
+    const effectiveShare = Math.max(0, p.shareAmount - p.creditApplied);
+    setDebt(payerId, p.userId, getDebt(payerId, p.userId) + effectiveShare);
   }
 
   // Subtract settlements — when participant pays payer, their debt decreases
   for (const s of settlements) {
     setDebt(s.payeeId, s.payerId, getDebt(s.payeeId, s.payerId) - s.amount);
+  }
+
+  // Adjust for used credits — when userId used credit from owedByUserId, owedByUserId owes less
+  const allCredits = await creditRepo.findCreditsByRoom(roomId);
+  for (const credit of allCredits) {
+    if (credit.usedCredit > 0) {
+      setDebt(credit.owedByUserId, credit.userId,
+        getDebt(credit.owedByUserId, credit.userId) + credit.usedCredit);
+    }
   }
 
   // Flatten pairDebts into a canonical single-direction map.
