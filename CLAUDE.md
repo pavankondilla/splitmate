@@ -352,6 +352,17 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ---
 
+## Phase 14: Member Management & Access Control
+
+| Feature | Description |
+|---|---|
+| **Member Removal** | Admin-only removal of room members (like WhatsApp). Shows confirmation with balance, unsettled count, warnings. Member must be settled (balance ≥ 0) before removal. Logs activity with `removedBy` tracking. |
+| **Expense Delete (Alternative 2)** | Creator-only deletion. Admins can no longer delete other members' expenses. Maintains creator accountability. |
+| **Database Schema** | Added `removedBy` column to room_members table (UUID FK to users) to track who removed each member. |
+| **API Route** | `DELETE /api/rooms/[id]/members/[memberId]` — permission checks, balance validation, activity logging. |
+
+---
+
 ## Phase 13 Features (UI/UX Refinements)
 
 - **Unified Activity Feed:** Merged expenses and settlements into single timeline (sorted by date)
