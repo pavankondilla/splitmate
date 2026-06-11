@@ -7,6 +7,7 @@ interface ParticipantRecord {
   expenseId: string;
   userId: string;
   shareAmount: number;
+  creditApplied: number;
 }
 
 interface SettlementRecord {
@@ -51,8 +52,14 @@ export function computeNetBalance(
     .filter((c) => c.owedByUserId === userId)
     .reduce((sum, c) => sum + c.usedCredit, 0);
 
+  // When a participant's share in an expense paid by userId is covered by auto-credit,
+  // userId has effectively received that amount — reduce what they're still owed.
+  const virtualReceiptsFromCredits = participants
+    .filter((p) => p.userId !== userId && expensePaidByMap.get(p.expenseId) === userId)
+    .reduce((sum, p) => sum + p.creditApplied, 0);
+
   const netBalance =
-    (totalOwedToUser - settlementsReceived) -
+    (totalOwedToUser - settlementsReceived - virtualReceiptsFromCredits) -
     (totalUserOwes - settlementsPaid - virtualSettlementsPaid);
 
   return { netBalance, totalOwedToUser, totalUserOwes };
