@@ -17,6 +17,7 @@ interface SettlementRecord {
 }
 
 interface CreditRecord {
+  userId: string;
   owedByUserId: string;
   usedCredit: number;
 }
@@ -46,11 +47,17 @@ export function computeNetBalance(
     .filter((s) => s.payerId === userId)
     .reduce((sum, s) => sum + s.amount, 0);
 
-  // When another user's credit (owedByUserId=userId) is consumed via auto-credit,
-  // it means userId effectively paid that amount — count it as a virtual settlement paid.
+  // Only the expense-auto-credited portion counts as virtual settlement paid.
+  // Settlement-return portion is already in settlementsPaid — don't double-count.
+  const expenseCreditUsedByUser = new Map<string, number>();
+  for (const p of participants) {
+    if (p.creditApplied > 0) {
+      expenseCreditUsedByUser.set(p.userId, (expenseCreditUsedByUser.get(p.userId) ?? 0) + p.creditApplied);
+    }
+  }
   const virtualSettlementsPaid = credits
     .filter((c) => c.owedByUserId === userId)
-    .reduce((sum, c) => sum + c.usedCredit, 0);
+    .reduce((sum, c) => sum + Math.min(c.usedCredit, expenseCreditUsedByUser.get(c.userId) ?? 0), 0);
 
   // When a participant's share in an expense paid by userId is covered by auto-credit,
   // userId has effectively received that amount — reduce what they're still owed.
