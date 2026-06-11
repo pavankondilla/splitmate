@@ -376,4 +376,30 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ---
 
-*Last updated: Phase 13 — Complete. App is live at splitmate.co.in. All balance bugs fixed. UI/UX refined. Mobile responsive. Tab order finalized.*
+## Phase 16: Credit System & Balance Calculation Overhaul
+
+**Critical bugs fixed:**
+
+| Bug | Root Cause | Fix |
+|---|---|---|
+| Credit banner showing after settlement | `detectAndCreateCredit()` ignored existing credits; created spurious new credit on settlement returns | Check payee's historical credits owed by payer before declaring overpayment |
+| Balance showing -₹1,300 instead of -₹1,000 | `computeNetBalance()` didn't account for `creditApplied` on participant shares | Added `virtualReceiptsFromCredits`: sum creditApplied on expense payer's shares |
+| Auto-credit not reflected in expense payer's balance | Auto-credit only updated the expense participant, not the payer's balance | Pass `creditApplied` field through balance calc; reduce `totalOwedToUser` by auto-credited amounts |
+| Random settlement numbers after credit use | `usedCredit` was double-counted: both as expense auto-credit AND as settlement-return | Cap `usedCredit` at true expense auto-credit amount; exclude settlement-return portion |
+
+**Key logic changes:**
+
+1. **`consumeCreditsOnSettlement(payerId, payeeId, amount, roomId)`**: When payer settles to payee, exhausts payee's credits owed by payer (if any). Called after every settlement.
+
+2. **`computeNetBalance()` now includes:**
+   - `virtualSettlementsPaid`: Credits owed by user where usedCredit ≤ true expense auto-credit amount
+   - `virtualReceiptsFromCredits`: Sum of creditApplied on user's own expense shares
+   - Formula: `netBalance = (totalOwedToUser - settlementsReceived - virtualReceiptsFromCredits) - (totalUserOwes - settlementsPaid - virtualSettlementsPaid)`
+
+3. **`getPairwiseBalances()` cap fix**: Only counts auto-credited portion of usedCredit, not settlement-return portion.
+
+**Works for any room size** (3, 4, 5+ members). Auto-credit propagates correctly across all expense participants.
+
+---
+
+*Last updated: Phase 16 — Complete. Credit system fully synced. All balances correct. App stable at splitmate.co.in.*
