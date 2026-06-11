@@ -35,11 +35,18 @@ export async function detectAndCreateCredit(
   const overpayment = totalPaid - totalOwed;
   if (overpayment <= 0) return null;
 
+  // If payee has existing credits owed by payer, the settlement is returning those credits
+  // (not a genuine new overpayment). Subtract historical credit debt before checking for surplus.
+  const payeeCreditsFromPayer = await creditRepo.findCreditsByUserRoomAndOwedBy(payeeId, roomId, payerId);
+  const totalCreditDebt = payeeCreditsFromPayer.reduce((sum, c) => sum + c.totalCredit, 0);
+  const adjustedOverpayment = overpayment - totalCreditDebt;
+  if (adjustedOverpayment <= 0) return null;
+
   // Only create credit for the DELTA above existing credit records for this pair.
   // Prevents duplicate records when multiple settlements occur over time.
   const existingCredits = await creditRepo.findCreditsByUserRoomAndOwedBy(payerId, roomId, payeeId);
   const existingTotal = existingCredits.reduce((sum, c) => sum + c.totalCredit, 0);
-  const delta = overpayment - existingTotal;
+  const delta = adjustedOverpayment - existingTotal;
   if (delta <= 0) return null;
 
   const credit = await creditRepo.createCredit({
