@@ -21,13 +21,15 @@ export async function getRoomBalances(roomId: string, userId: string): Promise<B
   const participants = await expenseRepo.findParticipantsByExpenseIds(expenseIds);
   const settlements = await settlementRepo.findSettlementsByRoomId(roomId);
   const users = await userRepo.findUsersByIds(memberIds);
+  const allCredits = await creditRepo.findCreditsByRoom(roomId);
 
   return users.map((user) => {
     const { netBalance, totalOwedToUser, totalUserOwes } = computeNetBalance(
       user.id,
       expenses,
       participants,
-      settlements
+      settlements,
+      allCredits
     );
     return {
       userId: user.id,

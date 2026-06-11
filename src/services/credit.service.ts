@@ -73,6 +73,34 @@ export async function getTotalAvailableCredit(userId: string, roomId: string): P
   return credits.reduce((sum, c) => sum + (c.totalCredit - c.usedCredit), 0);
 }
 
+// Called after a settlement is recorded.
+// If the payee has credits with owedByUserId = payer, reduce them by the settlement amount.
+// This handles the case where payer is "returning" overpayment credit back to payee.
+export async function consumeCreditsOnSettlement(
+  payerId: string,
+  payeeId: string,
+  settlementAmount: number,
+  roomId: string
+) {
+  // Find active credits belonging to payee that payer owes
+  const credits = await creditRepo.findCreditsByUserRoomAndOwedBy(payeeId, roomId, payerId);
+  const activeCredits = credits.filter((c) => !c.isExhausted);
+  if (activeCredits.length === 0) return;
+
+  let remaining = settlementAmount;
+  for (const credit of activeCredits) {
+    if (remaining <= 0) break;
+    const available = credit.totalCredit - credit.usedCredit;
+    if (available <= 0) continue;
+
+    const consume = Math.min(available, remaining);
+    const newUsed = credit.usedCredit + consume;
+    const isExhausted = newUsed >= credit.totalCredit;
+    await creditRepo.updateCreditUsed(credit.id, newUsed, isExhausted);
+    remaining -= consume;
+  }
+}
+
 export interface ApplyCreditInput {
   expenseParticipantId: string; // which participant share to cover
 }

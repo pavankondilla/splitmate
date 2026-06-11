@@ -15,11 +15,17 @@ interface SettlementRecord {
   amount: number;
 }
 
+interface CreditRecord {
+  owedByUserId: string;
+  usedCredit: number;
+}
+
 export function computeNetBalance(
   userId: string,
   expenses: ExpenseRecord[],
   participants: ParticipantRecord[],
-  settlements: SettlementRecord[]
+  settlements: SettlementRecord[],
+  credits: CreditRecord[] = []
 ): { netBalance: number; totalOwedToUser: number; totalUserOwes: number } {
   const expensePaidByMap = new Map(expenses.map((e) => [e.id, e.paidBy]));
 
@@ -39,8 +45,15 @@ export function computeNetBalance(
     .filter((s) => s.payerId === userId)
     .reduce((sum, s) => sum + s.amount, 0);
 
+  // When another user's credit (owedByUserId=userId) is consumed via auto-credit,
+  // it means userId effectively paid that amount — count it as a virtual settlement paid.
+  const virtualSettlementsPaid = credits
+    .filter((c) => c.owedByUserId === userId)
+    .reduce((sum, c) => sum + c.usedCredit, 0);
+
   const netBalance =
-    (totalOwedToUser - settlementsReceived) - (totalUserOwes - settlementsPaid);
+    (totalOwedToUser - settlementsReceived) -
+    (totalUserOwes - settlementsPaid - virtualSettlementsPaid);
 
   return { netBalance, totalOwedToUser, totalUserOwes };
 }

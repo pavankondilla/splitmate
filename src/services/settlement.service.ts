@@ -2,7 +2,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import * as settlementRepo from "@/repositories/settlement.repository";
 import * as roomRepo from "@/repositories/room.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
-import { detectAndCreateCredit } from "@/services/credit.service";
+import { detectAndCreateCredit, consumeCreditsOnSettlement } from "@/services/credit.service";
 
 export interface RecordSettlementInput {
   payerId: string;
@@ -38,6 +38,9 @@ export async function recordSettlement(userId: string, roomId: string, data: Rec
 
   // Auto-detect overpayment and create credit record if applicable
   await detectAndCreateCredit(settlement.id, data.payerId, data.payeeId, roomId);
+
+  // Consume payee's existing credits if payer is returning overpayment
+  await consumeCreditsOnSettlement(data.payerId, data.payeeId, data.amount, roomId);
 
   return settlement;
 }
