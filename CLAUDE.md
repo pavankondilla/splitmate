@@ -456,4 +456,12 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 
 ---
 
-*Last updated: Phase 20 — Complete. All credit displays driven by user_credits. App stable at splitmate.co.in.*
+## Phase 21: Activity Status Ordering — createdAt, not expense_date
+
+**Bug:** Overpayer's share on an expense added AFTER their settlement still showed "Settled" (hiding the Apply credit button). `computeStatuses` stamped expense events at `expense_date` midnight while settlements use real timestamps — so any same-day (or backdated) expense sorted BEFORE the day's settlements, and the settlement's surplus covered it in the replay even though that surplus had already become a DB credit.
+
+**Fix:** Event ordering in `computeStatuses` (and `latestExpenseForPair`) now uses `expenses.createdAt` — when the expense was actually entered — matching how `detectAndCreateCredit` saw the world at settlement time. `expense_date` remains for display/grouping only.
+
+---
+
+*Last updated: Phase 21 — Complete. Activity statuses ordered by record time. App stable at splitmate.co.in.*

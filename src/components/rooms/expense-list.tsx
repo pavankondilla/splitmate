@@ -14,6 +14,11 @@ interface Expense {
   category: string;
   paidBy: string;
   expenseDate: string;
+  // When the expense was actually entered. Event ordering must use this, not
+  // expenseDate: the date has no clock time (sorts at midnight) and can be
+  // backdated, which would wrongly place expenses before settlements that
+  // were recorded earlier in real time.
+  createdAt: string | Date;
   createdBy: string;
   participants: Participant[];
 }
@@ -107,7 +112,7 @@ function computeStatuses(
           // Credit-covered portion is not owed in cash — only the remainder
           // needs a settlement allocated to it.
           const cashShare = Math.max(0, p.shareAmount - p.creditApplied);
-          events.push({ type: "expense", expId: exp.id, share: cashShare, time: new Date(exp.expenseDate).getTime() });
+          events.push({ type: "expense", expId: exp.id, share: cashShare, time: new Date(exp.createdAt).getTime() });
         }
       }
     }
@@ -195,7 +200,7 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
   const latestExpenseForPair = useMemo(() => {
     const map = new Map<string, { expId: string; time: number }>();
     for (const exp of expenses) {
-      const time = new Date(exp.expenseDate).getTime();
+      const time = new Date(exp.createdAt).getTime();
       for (const p of exp.participants) {
         if (p.userId === exp.paidBy) continue;
         const key = `${exp.paidBy}|${p.userId}`;

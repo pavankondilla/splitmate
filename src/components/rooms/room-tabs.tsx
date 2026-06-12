@@ -17,7 +17,7 @@ type Settlement = {
   onBehalfOfAmount: number;
   onBehalfOfUserId: string | null;
 };
-type Expense = { id: string; title: string; amount: number; category: string; paidBy: string; expenseDate: string; createdBy: string; participants: Array<{ id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }> };
+type Expense = { id: string; title: string; amount: number; category: string; paidBy: string; expenseDate: string; createdAt: string | Date; createdBy: string; participants: Array<{ id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }> };
 type Member = { id: string; name: string; email: string; role: string; joinedAt: string };
 type Credit = {
   id: string;
