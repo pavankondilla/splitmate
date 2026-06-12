@@ -14,9 +14,9 @@ describe("computeNetBalance", () => {
   it("payer has positive balance when others owe them", () => {
     const expenses = [{ id: "exp-1", paidBy: alice }];
     const participants = [
-      { expenseId: "exp-1", userId: alice, shareAmount: 100 },
-      { expenseId: "exp-1", userId: bob, shareAmount: 100 },
-      { expenseId: "exp-1", userId: charlie, shareAmount: 100 },
+      { expenseId: "exp-1", userId: alice, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: bob, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: charlie, shareAmount: 100, creditApplied: 0 },
     ];
     const result = computeNetBalance(alice, expenses, participants, []);
     expect(result.totalOwedToUser).toBe(200); // bob + charlie owe alice
@@ -27,8 +27,8 @@ describe("computeNetBalance", () => {
   it("participant has negative balance when they owe the payer", () => {
     const expenses = [{ id: "exp-1", paidBy: alice }];
     const participants = [
-      { expenseId: "exp-1", userId: alice, shareAmount: 100 },
-      { expenseId: "exp-1", userId: bob, shareAmount: 100 },
+      { expenseId: "exp-1", userId: alice, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: bob, shareAmount: 100, creditApplied: 0 },
     ];
     const result = computeNetBalance(bob, expenses, participants, []);
     expect(result.totalUserOwes).toBe(100);
@@ -38,8 +38,8 @@ describe("computeNetBalance", () => {
   it("settlement reduces debt correctly", () => {
     const expenses = [{ id: "exp-1", paidBy: alice }];
     const participants = [
-      { expenseId: "exp-1", userId: alice, shareAmount: 100 },
-      { expenseId: "exp-1", userId: bob, shareAmount: 100 },
+      { expenseId: "exp-1", userId: alice, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: bob, shareAmount: 100, creditApplied: 0 },
     ];
     const settlements = [{ payerId: bob, payeeId: alice, amount: 100 }];
 
@@ -53,8 +53,8 @@ describe("computeNetBalance", () => {
   it("partial settlement leaves remaining balance", () => {
     const expenses = [{ id: "exp-1", paidBy: alice }];
     const participants = [
-      { expenseId: "exp-1", userId: alice, shareAmount: 100 },
-      { expenseId: "exp-1", userId: bob, shareAmount: 100 },
+      { expenseId: "exp-1", userId: alice, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: bob, shareAmount: 100, creditApplied: 0 },
     ];
     const settlements = [{ payerId: bob, payeeId: alice, amount: 60 }];
 
@@ -74,10 +74,10 @@ describe("computeNetBalance", () => {
       { id: "exp-2", paidBy: bob },
     ];
     const participants = [
-      { expenseId: "exp-1", userId: alice, shareAmount: 100 },
-      { expenseId: "exp-1", userId: bob, shareAmount: 100 },
-      { expenseId: "exp-2", userId: alice, shareAmount: 75 },
-      { expenseId: "exp-2", userId: bob, shareAmount: 75 },
+      { expenseId: "exp-1", userId: alice, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: bob, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-2", userId: alice, shareAmount: 75, creditApplied: 0 },
+      { expenseId: "exp-2", userId: bob, shareAmount: 75, creditApplied: 0 },
     ];
     const aliceResult = computeNetBalance(alice, expenses, participants, []);
     expect(aliceResult.netBalance).toBe(25);
@@ -92,11 +92,11 @@ describe("computeNetBalance", () => {
       { id: "exp-2", paidBy: bob },
     ];
     const participants = [
-      { expenseId: "exp-1", userId: alice, shareAmount: 100 },
-      { expenseId: "exp-1", userId: bob, shareAmount: 100 },
-      { expenseId: "exp-1", userId: charlie, shareAmount: 100 },
-      { expenseId: "exp-2", userId: alice, shareAmount: 50 },
-      { expenseId: "exp-2", userId: bob, shareAmount: 50 },
+      { expenseId: "exp-1", userId: alice, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: bob, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-1", userId: charlie, shareAmount: 100, creditApplied: 0 },
+      { expenseId: "exp-2", userId: alice, shareAmount: 50, creditApplied: 0 },
+      { expenseId: "exp-2", userId: bob, shareAmount: 50, creditApplied: 0 },
     ];
 
     const nets = [alice, bob, charlie].map(

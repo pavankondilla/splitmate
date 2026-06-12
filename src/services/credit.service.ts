@@ -3,6 +3,8 @@ import * as creditRepo from "@/repositories/credit.repository";
 import * as expenseRepo from "@/repositories/expense.repository";
 import * as settlementRepo from "@/repositories/settlement.repository";
 import * as roomRepo from "@/repositories/room.repository";
+import * as proposalRepo from "@/repositories/proposal.repository";
+import * as userRepo from "@/repositories/user.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
 
 // Called after every settlement is recorded.
@@ -141,7 +143,8 @@ export async function applyCredit(
   // Apply up to the share amount
   const applyAmount = Math.min(participant.shareAmount, totalAvailable);
 
-  // Deduct from credit records (oldest first)
+  // Deduct from credit records (oldest first), track what was consumed for proposal creation
+  const creditsConsumed: Array<{ creditId: string; owedByUserId: string; deductAmount: number }> = [];
   let remaining = applyAmount;
   for (const credit of availableCredits) {
     if (remaining <= 0) break;
@@ -152,11 +155,34 @@ export async function applyCredit(
     const newUsed = credit.usedCredit + deduct;
     const isExhausted = newUsed >= credit.totalCredit;
     await creditRepo.updateCreditUsed(credit.id, newUsed, isExhausted);
+    creditsConsumed.push({ creditId: credit.id, owedByUserId: credit.owedByUserId, deductAmount: deduct });
     remaining -= deduct;
   }
 
   // Mark the participant share as credited
   const updated = await creditRepo.applyParticipantCredit(input.expenseParticipantId, applyAmount);
+
+  // Create settlement proposals: for each credit consumed, if owedByUserId !== expense paidBy,
+  // the debtor (owedByUserId) should pay the expense payer directly.
+  const expense = await expenseRepo.findExpenseById(participant.expenseId);
+  if (expense) {
+    const applierUser = await userRepo.findUserById(userId);
+    const applierName = applierUser?.name ?? "A member";
+    for (const { creditId, owedByUserId, deductAmount } of creditsConsumed) {
+      if (owedByUserId !== expense.paidBy) {
+        await proposalRepo.createProposal({
+          roomId,
+          fromUserId: owedByUserId,
+          toUserId: expense.paidBy,
+          amount: deductAmount,
+          reason: `${applierName} applied ₹${(deductAmount / 100).toLocaleString("en-IN")} credit to "${expense.title}"`,
+          triggeredByUserId: userId,
+          sourceCreditId: creditId,
+          status: "PROPOSED",
+        });
+      }
+    }
+  }
 
   await logActivity({
     roomId,

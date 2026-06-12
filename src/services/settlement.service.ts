@@ -1,6 +1,7 @@
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import * as settlementRepo from "@/repositories/settlement.repository";
 import * as roomRepo from "@/repositories/room.repository";
+import * as proposalRepo from "@/repositories/proposal.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
 import { detectAndCreateCredit, consumeCreditsOnSettlement } from "@/services/credit.service";
 
@@ -41,6 +42,11 @@ export async function recordSettlement(userId: string, roomId: string, data: Rec
 
   // Consume payee's existing credits if payer is returning overpayment
   await consumeCreditsOnSettlement(data.payerId, data.payeeId, data.amount, roomId);
+
+  // Confirm any matching settlement proposals for this pair
+  await proposalRepo.confirmProposalsForSettlement(
+    roomId, data.payerId, data.payeeId, data.amount, settlement.id
+  );
 
   return settlement;
 }

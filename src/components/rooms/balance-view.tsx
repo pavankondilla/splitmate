@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatCurrency } from "@/lib/format";
-import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, Sparkles } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, Sparkles, Bell, X } from "lucide-react";
 import { RecordSettlementDialog } from "./record-settlement-dialog";
 
 interface Balance {
@@ -29,6 +29,19 @@ interface Member {
   joinedAt: string;
 }
 
+interface SettlementProposal {
+  id: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  triggeredByUserName: string;
+  amount: number;
+  reason: string;
+  status: string;
+  createdAt: string;
+}
+
 interface BalanceViewProps {
   roomId: string;
   balances: Balance[];
@@ -46,6 +59,8 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
   const memberEmailMap = new Map(members.map((m) => [m.id, m.email]));
 
   const [availableCredit, setAvailableCredit] = useState(0);
+  const [proposals, setProposals] = useState<SettlementProposal[]>([]);
+
   useEffect(() => {
     fetch(`/api/rooms/${roomId}/credits`)
       .then((r) => r.json())
@@ -54,7 +69,18 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
         setAvailableCredit(total);
       })
       .catch(() => {});
+
+    fetch(`/api/rooms/${roomId}/proposals`)
+      .then((r) => r.json())
+      .then((data: SettlementProposal[]) => setProposals(data))
+      .catch(() => {});
   }, [roomId]);
+
+  function dismissProposal(proposalId: string) {
+    fetch(`/api/rooms/${roomId}/proposals/${proposalId}`, { method: "PATCH" })
+      .then(() => setProposals((prev) => prev.filter((p) => p.id !== proposalId)))
+      .catch(() => {});
+  }
 
   const myBalance = balances.find((b) => b.userId === currentUserId);
   const myNet = myBalance?.netBalance ?? 0;
@@ -75,8 +101,98 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
   const balanceColor = myNet > 0 ? "text-emerald-600" : myNet < 0 ? "text-rose-600" : "text-gray-400";
   const balanceLabel = myNet > 0 ? "You are owed" : myNet < 0 ? "You owe money" : "All settled up ✅";
 
+  // Proposals where YOU must pay
+  const myProposals = proposals.filter((p) => p.fromUserId === currentUserId);
+  // Proposals where others will pay YOU (informational)
+  const incomingProposals = proposals.filter((p) => p.toUserId === currentUserId);
+
   return (
     <div className="space-y-5">
+
+      {/* ── SUGGESTED SETTLEMENTS (action required for me) ── */}
+      {myProposals.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <Bell className="h-4 w-4 text-amber-500 shrink-0" />
+            <h3 className="text-xs font-bold text-amber-600 uppercase tracking-wider">
+              Action Required
+            </h3>
+          </div>
+          {myProposals.map((proposal) => (
+            <div key={proposal.id}
+              className="rounded-xl bg-amber-50 border border-amber-200 shadow-sm overflow-hidden">
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                      <Bell className="h-4 w-4 text-amber-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm">
+                        Pay {proposal.toUserName}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        {proposal.reason}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 shrink-0">
+                    <p className="text-xl font-bold text-amber-700">
+                      {formatCurrency(proposal.amount)}
+                    </p>
+                    <button
+                      onClick={() => dismissProposal(proposal.id)}
+                      className="text-gray-400 hover:text-gray-600 mt-0.5"
+                      title="Dismiss"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="px-4 pb-4">
+                <RecordSettlementDialog
+                  roomId={roomId}
+                  members={memberOptions}
+                  currentUserId={currentUserId}
+                  prefillPayeeId={proposal.toUserId}
+                  prefillAmount={proposal.amount}
+                  triggerLabel={`Pay ${proposal.toUserName} ${formatCurrency(proposal.amount)}`}
+                  triggerClassName="w-full gap-2 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 font-semibold"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── INCOMING SETTLEMENTS (informational — others will pay me) ── */}
+      {incomingProposals.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 px-1">
+            <Sparkles className="h-4 w-4 text-indigo-500 shrink-0" />
+            <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+              Incoming Payments
+            </h3>
+          </div>
+          {incomingProposals.map((proposal) => (
+            <div key={proposal.id}
+              className="rounded-xl bg-indigo-50 border border-indigo-100 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">
+                    {proposal.fromUserName} will pay you
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">{proposal.reason}</p>
+                </div>
+                <p className="text-xl font-bold text-indigo-600 shrink-0">
+                  {formatCurrency(proposal.amount)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── CARD 1: YOUR PROFILE & BALANCE ── */}
       <div className={`rounded-2xl border p-5 ${profileBg}`}>
