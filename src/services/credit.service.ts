@@ -90,6 +90,25 @@ export async function detectAndCreateCredit(
   return credit;
 }
 
+// Returns all credit records for a room (every member's credits).
+// Used by the Activity tab to display credit remaining from the DB
+// instead of deriving it from the expense/settlement timeline.
+export async function getRoomCredits(roomId: string, userId: string) {
+  const membership = await roomRepo.findRoomMember(roomId, userId);
+  if (!membership) throw new ForbiddenError();
+
+  const credits = await creditRepo.findCreditsByRoom(roomId);
+  return credits.map((c) => ({
+    id: c.id,
+    userId: c.userId,
+    owedByUserId: c.owedByUserId,
+    totalCredit: c.totalCredit,
+    usedCredit: c.usedCredit,
+    isExhausted: c.isExhausted,
+    status: c.status,
+  }));
+}
+
 // Returns available (non-exhausted) credits for a user in a room.
 export async function getAvailableCredits(userId: string, roomId: string) {
   const membership = await roomRepo.findRoomMember(roomId, userId);

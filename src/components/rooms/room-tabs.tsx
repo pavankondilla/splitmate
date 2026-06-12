@@ -19,19 +19,29 @@ type Settlement = {
 };
 type Expense = { id: string; title: string; amount: number; category: string; paidBy: string; expenseDate: string; createdBy: string; participants: Array<{ id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }> };
 type Member = { id: string; name: string; email: string; role: string; joinedAt: string };
+type Credit = {
+  id: string;
+  userId: string;
+  owedByUserId: string;
+  totalCredit: number;
+  usedCredit: number;
+  isExhausted: boolean;
+  status: string;
+};
 
 interface RoomTabsProps {
   roomId: string;
   members: Member[];
   expenses: Expense[];
   settlements: Settlement[];
+  credits: Credit[];
   balances: Array<{ userId: string; userName: string; userAvatar: string | null; netBalance: number }>;
   pairwise: Array<{ fromUserId: string; fromUserName: string; toUserId: string; toUserName: string; amount: number }>;
   currentUserId: string;
   currentUserRole: string;
 }
 
-export function RoomTabs({ roomId, members, expenses, settlements, balances, pairwise, currentUserId, currentUserRole }: RoomTabsProps) {
+export function RoomTabs({ roomId, members, expenses, settlements, credits, balances, pairwise, currentUserId, currentUserRole }: RoomTabsProps) {
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }));
 
   return (
@@ -49,7 +59,7 @@ export function RoomTabs({ roomId, members, expenses, settlements, balances, pai
       </div>
 
       <TabsContent value="expenses">
-        <ExpenseList roomId={roomId} expenses={expenses} settlements={settlements} members={memberOptions} currentUserId={currentUserId} currentUserRole={currentUserRole} />
+        <ExpenseList roomId={roomId} expenses={expenses} settlements={settlements} credits={credits} members={memberOptions} currentUserId={currentUserId} currentUserRole={currentUserRole} />
       </TabsContent>
 
       <TabsContent value="balances">

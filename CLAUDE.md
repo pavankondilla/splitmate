@@ -436,4 +436,24 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ---
 
-*Last updated: Phase 19 — Complete. Proposal settlements correctly attributed. App stable at splitmate.co.in.*
+## Phase 20: Activity Tab Credit Display — Single Source of Truth
+
+**Bugs:** (1) Overpayer's shares on NEW expenses showed "Auto-credit" without the user ever applying credit — the Phase 13 client-side pool simulation silently consumed overpayment surplus. (2) The "💰 Credit remaining" line on cards showed the pool's stale leftover, never updating when credit was applied/consumed/returned via the real credit system.
+
+**Root cause:** `computeStatuses` in `expense-list.tsx` predates the credit system (Phase 13) and ran a parallel credit implementation that was never reconciled with `user_credits`.
+
+**Fix — DB is the single source of truth for all credit display:**
+
+| Change | Detail |
+|---|---|
+| Pool no longer covers new shares | Expense shares always start PENDING (with Apply credit button); only DB `creditApplied > 0` marks them credit-covered. Removed `AUTO_CREDIT` status kind. |
+| Pool surplus dropped after each settlement | Surplus becomes a `user_credit` (detectAndCreateCredit), so it leaves the cash pool — same money can't double-cover future shares. |
+| Pending shares use cash remainder | `shareAmount − creditApplied` so settlements allocate only to the uncovered portion. |
+| "Credit remaining" from DB | New `getRoomCredits` service (room-wide, membership-checked) → page → RoomTabs → ExpenseList. Shows `totalCredit − usedCredit` per (holder, owedBy) pair, once on the most recent expense card per pair. |
+| Top banner from same prop | Removed the client-side `/credits` fetch; derives from server-provided credits, refreshes with `router.refresh()`. |
+
+UI/read-path only — no migration, retroactively corrects displayed state.
+
+---
+
+*Last updated: Phase 20 — Complete. All credit displays driven by user_credits. App stable at splitmate.co.in.*

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { Trash2, ChevronDown, ChevronUp, CheckCircle2, Clock, Sparkles, Receipt, ArrowRight, Wallet } from "lucide-react";
+import { Trash2, ChevronDown, ChevronUp, CheckCircle2, Clock, Receipt, ArrowRight, Wallet } from "lucide-react";
 
 interface Participant { id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }
 interface Expense {
@@ -30,11 +30,21 @@ interface Settlement {
   onBehalfOfUserId: string | null;
 }
 interface Member { id: string; name: string }
+interface Credit {
+  id: string;
+  userId: string;        // credit holder
+  owedByUserId: string;  // who owes it back
+  totalCredit: number;
+  usedCredit: number;
+  isExhausted: boolean;
+  status: string;
+}
 
 interface ExpenseListProps {
   roomId: string;
   expenses: Expense[];
   settlements: Settlement[];
+  credits: Credit[];
   members: Member[];
   currentUserId: string;
   currentUserRole: string;
@@ -42,8 +52,7 @@ interface ExpenseListProps {
 
 type ParticipantStatus =
   | { kind: "PENDING" }
-  | { kind: "SETTLED"; remainingCredit?: number }   // remainingCredit > 0 when participant overpaid
-  | { kind: "AUTO_CREDIT"; remainingCredit: number }; // covered by prior credit; pool value after this expense
+  | { kind: "SETTLED" };
 
 const CATEGORY_CONFIG: Record<string, { icon: string; cardBg: string; badgeBg: string; badgeText: string }> = {
   RENT:      { icon: "🏠", cardBg: "bg-violet-50 border-violet-100",  badgeBg: "bg-violet-100",  badgeText: "text-violet-700"  },
@@ -63,13 +72,12 @@ function getDateLabel(dateStr: string): string {
   return formatDate(dateStr);
 }
 
-// Computes per-participant settlement status for every expense.
-// After all events for a (payer, participant) pair are processed:
-//   AUTO_CREDIT  — participant had pre-existing credit that covered the share
-//                  remainingCredit = pool AFTER deducting share
-//   SETTLED      — participant paid manually after the expense
-//                  remainingCredit = pool remaining after all debts cleared (overpayment)
-//   PENDING      — no settlement yet
+// Computes per-participant settlement status for every expense by allocating
+// real settlements to pending shares (oldest first) per (payer, participant)
+// pair. Overpayment surplus stays in the pool but NEVER covers later shares —
+// surplus is a credit (user_credits in the DB) and only an explicit
+// "Apply credit" marks a share covered (via creditApplied, handled at render).
+// Credit remaining is likewise displayed from the DB, not derived here.
 function computeStatuses(
   expenses: Expense[],
   settlements: Settlement[]
@@ -86,20 +94,20 @@ function computeStatuses(
   for (const pairKey of pairSet) {
     const [payerId, participantId] = pairKey.split("|");
 
-    type ExpEvent = { type: "expense"; expId: string; share: number; time: number };
-    type SetEvent = { type: "settlement"; amount: number; time: number };
-    type Ev = ExpEvent | SetEvent;
+    type Ev =
+      | { type: "expense"; expId: string; share: number; time: number }
+      | { type: "settlement"; amount: number; time: number };
 
     const events: Ev[] = [];
-    const expEvents: ExpEvent[] = [];
 
     for (const exp of expenses) {
       if (exp.paidBy === payerId) {
         const p = exp.participants.find((pt) => pt.userId === participantId);
         if (p) {
-          const ev: ExpEvent = { type: "expense", expId: exp.id, share: p.shareAmount, time: new Date(exp.expenseDate).getTime() };
-          events.push(ev);
-          expEvents.push(ev);
+          // Credit-covered portion is not owed in cash — only the remainder
+          // needs a settlement allocated to it.
+          const cashShare = Math.max(0, p.shareAmount - p.creditApplied);
+          events.push({ type: "expense", expId: exp.id, share: cashShare, time: new Date(exp.expenseDate).getTime() });
         }
       }
     }
@@ -116,7 +124,6 @@ function computeStatuses(
     }
 
     events.sort((a, b) => a.time - b.time);
-    expEvents.sort((a, b) => a.time - b.time);
 
     let pool = 0;
     const pending: Array<{ expId: string; remaining: number }> = [];
@@ -124,15 +131,8 @@ function computeStatuses(
     for (const ev of events) {
       if (ev.type === "expense") {
         if (!result.has(ev.expId)) result.set(ev.expId, new Map());
-        const expMap = result.get(ev.expId)!;
-        if (pool >= ev.share) {
-          pool -= ev.share;
-          expMap.set(participantId, { kind: "AUTO_CREDIT", remainingCredit: pool });
-        } else {
-          expMap.set(participantId, { kind: "PENDING" });
-          pending.push({ expId: ev.expId, remaining: ev.share - pool });
-          pool = 0;
-        }
+        result.get(ev.expId)!.set(participantId, { kind: "PENDING" });
+        if (ev.share > 0) pending.push({ expId: ev.expId, remaining: ev.share });
       } else {
         pool += ev.amount;
         while (pool > 0 && pending.length > 0) {
@@ -146,18 +146,10 @@ function computeStatuses(
             pool = 0;
           }
         }
-      }
-    }
-
-    // If pool > 0 after all events, participant overpaid.
-    // Store remainingCredit on the chronologically last expense so credit
-    // shows exactly once on the most recent card.
-    if (pool > 0 && expEvents.length > 0) {
-      const lastExpId = expEvents[expEvents.length - 1].expId;
-      const existing = result.get(lastExpId)?.get(participantId);
-      // Only attach to SETTLED cards (AUTO_CREDIT already has remainingCredit set correctly)
-      if (existing?.kind === "SETTLED") {
-        result.get(lastExpId)?.set(participantId, { kind: "SETTLED", remainingCredit: pool });
+        // Any surplus after covering all pending shares became a user_credit
+        // (detectAndCreateCredit). Drop it from the cash pool — the same money
+        // must not also cover future shares; applying credit is explicit.
+        pool = 0;
       }
     }
   }
@@ -165,26 +157,54 @@ function computeStatuses(
   return result;
 }
 
-export function ExpenseList({ roomId, expenses, settlements, members, currentUserId, currentUserRole }: ExpenseListProps) {
+export function ExpenseList({ roomId, expenses, settlements, credits, members, currentUserId, currentUserRole }: ExpenseListProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
   const [showSettlements, setShowSettlements] = useState(false);
-  const [availableCredit, setAvailableCredit] = useState(0);
   const [applyingCredit, setApplyingCredit] = useState<string | null>(null);
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
   const statusMap = useMemo(() => computeStatuses(expenses, settlements), [expenses, settlements]);
 
-  useEffect(() => {
-    fetch(`/api/rooms/${roomId}/credits`)
-      .then((r) => r.json())
-      .then((credits: Array<{ totalCredit: number; usedCredit: number }>) => {
-        const total = credits.reduce((sum, c) => sum + (c.totalCredit - c.usedCredit), 0);
-        setAvailableCredit(total);
-      })
-      .catch(() => {});
-  }, [roomId]);
+  // Current user's available credit — straight from the DB (server-provided),
+  // refreshed via router.refresh() after every mutation.
+  const availableCredit = useMemo(
+    () =>
+      credits
+        .filter((c) => c.userId === currentUserId && !c.isExhausted)
+        .reduce((sum, c) => sum + (c.totalCredit - c.usedCredit), 0),
+    [credits, currentUserId]
+  );
+
+  // Remaining credit per (holder, owedBy) pair — also straight from the DB.
+  const creditRemainingByPair = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of credits) {
+      if (c.isExhausted) continue;
+      const remaining = c.totalCredit - c.usedCredit;
+      if (remaining <= 0) continue;
+      const key = `${c.owedByUserId}|${c.userId}`;
+      map.set(key, (map.get(key) ?? 0) + remaining);
+    }
+    return map;
+  }, [credits]);
+
+  // The most recent expense per (payer, participant) pair — credit remaining
+  // is displayed once, on that card, instead of repeating on every card.
+  const latestExpenseForPair = useMemo(() => {
+    const map = new Map<string, { expId: string; time: number }>();
+    for (const exp of expenses) {
+      const time = new Date(exp.expenseDate).getTime();
+      for (const p of exp.participants) {
+        if (p.userId === exp.paidBy) continue;
+        const key = `${exp.paidBy}|${p.userId}`;
+        const current = map.get(key);
+        if (!current || time >= current.time) map.set(key, { expId: exp.id, time });
+      }
+    }
+    return map;
+  }, [expenses]);
 
   async function handleApplyCredit(participantId: string) {
     setApplyingCredit(participantId);
@@ -352,7 +372,7 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                         // If credit was explicitly applied (stored in DB), override status
                         // creditConfirmed=true → SETTLED (green), false → PENDING_SETTLEMENT (amber)
                         const status = p.creditApplied > 0
-                          ? { kind: p.creditConfirmed ? "AUTO_CREDIT_SETTLED" as const : "AUTO_CREDIT_PENDING" as const, remainingCredit: 0 }
+                          ? { kind: p.creditConfirmed ? "AUTO_CREDIT_SETTLED" as const : "AUTO_CREDIT_PENDING" as const }
                           : computedStatus;
 
                         const canApplyCredit =
@@ -388,10 +408,6 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                                 <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
                                   <Clock className="h-3.5 w-3.5" /> Credit pending
                                 </span>
-                              ) : status?.kind === "AUTO_CREDIT" ? (
-                                <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
-                                  <Sparkles className="h-3.5 w-3.5" /> Auto-credit
-                                </span>
                               ) : canApplyCredit ? (
                                 <div className="flex items-center gap-2">
                                   <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
@@ -415,20 +431,17 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                         );
                       })}
 
-                      {/* Credit summary — show for AUTO_CREDIT (remaining after use)
-                          and for SETTLED with overpayment (remainingCredit set on last expense) */}
+                      {/* Credit summary — real remaining credit from user_credits,
+                          shown once per pair on the most recent expense card */}
                       {(() => {
                         const creditHolders = exp.participants
                           .filter((p) => p.userId !== exp.paidBy)
                           .flatMap((p) => {
-                            const s = expStatuses?.get(p.userId);
-                            if (s?.kind === "AUTO_CREDIT" && s.remainingCredit > 0) {
-                              return [{ userId: p.userId, credit: s.remainingCredit }];
-                            }
-                            if (s?.kind === "SETTLED" && s.remainingCredit && s.remainingCredit > 0) {
-                              return [{ userId: p.userId, credit: s.remainingCredit }];
-                            }
-                            return [];
+                            const pairKey = `${exp.paidBy}|${p.userId}`;
+                            if (latestExpenseForPair.get(pairKey)?.expId !== exp.id) return [];
+                            const remaining = creditRemainingByPair.get(pairKey) ?? 0;
+                            if (remaining <= 0) return [];
+                            return [{ userId: p.userId, credit: remaining }];
                           });
 
                         if (creditHolders.length === 0) return null;

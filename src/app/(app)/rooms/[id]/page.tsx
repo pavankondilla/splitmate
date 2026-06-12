@@ -4,6 +4,7 @@ import { getRoomDetail } from "@/services/room.service";
 import { getRoomExpenses } from "@/services/expense.service";
 import { getRoomBalances, getPairwiseBalances } from "@/services/balance.service";
 import { getRoomSettlements } from "@/services/settlement.service";
+import { getRoomCredits } from "@/services/credit.service";
 import { formatCurrency } from "@/lib/format";
 import { RoomTabs } from "@/components/rooms/room-tabs";
 import { Badge } from "@/components/ui/badge";
@@ -13,14 +14,15 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const user = await requireDbUser();
 
-  let detail, expenses, balances, pairwise, settlements;
+  let detail, expenses, balances, pairwise, settlements, credits;
   try {
-    [detail, expenses, balances, pairwise, settlements] = await Promise.all([
+    [detail, expenses, balances, pairwise, settlements, credits] = await Promise.all([
       getRoomDetail(id, user.id),
       getRoomExpenses(id, user.id),
       getRoomBalances(id, user.id),
       getPairwiseBalances(id, user.id),
       getRoomSettlements(id, user.id),
+      getRoomCredits(id, user.id),
     ]);
   } catch (err) {
     if (err instanceof NotFoundError) notFound();
@@ -72,6 +74,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
         members={memberList}
         expenses={expenses}
         settlements={serializedSettlements}
+        credits={credits}
         balances={balances}
         pairwise={pairwise}
         currentUserId={user.id}
