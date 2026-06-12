@@ -7,7 +7,16 @@ import { MembersView } from "./members-view";
 import { AddExpenseDialog } from "./add-expense-dialog";
 import { RecordSettlementDialog } from "./record-settlement-dialog";
 
-type Settlement = { id: string; payerId: string; payeeId: string; amount: number; note: string | null; settledAt: string };
+type Settlement = {
+  id: string;
+  payerId: string;
+  payeeId: string;
+  amount: number;
+  note: string | null;
+  settledAt: string;
+  onBehalfOfAmount: number;
+  onBehalfOfUserId: string | null;
+};
 type Expense = { id: string; title: string; amount: number; category: string; paidBy: string; expenseDate: string; createdBy: string; participants: Array<{ id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }> };
 type Member = { id: string; name: string; email: string; role: string; joinedAt: string };
 

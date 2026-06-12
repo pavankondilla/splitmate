@@ -48,6 +48,8 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
     amount: s.amount,
     note: s.note,
     settledAt: s.settledAt.toISOString(),
+    onBehalfOfAmount: s.onBehalfOfAmount,
+    onBehalfOfUserId: s.onBehalfOfUserId,
   }));
 
   return (

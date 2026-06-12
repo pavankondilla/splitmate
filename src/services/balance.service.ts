@@ -4,6 +4,7 @@ import * as settlementRepo from "@/repositories/settlement.repository";
 import * as roomRepo from "@/repositories/room.repository";
 import * as userRepo from "@/repositories/user.repository";
 import * as creditRepo from "@/repositories/credit.repository";
+import * as proposalRepo from "@/repositories/proposal.repository";
 import type { Balance, PairwiseBalance } from "@/types/domain";
 import { computeNetBalance } from "@/lib/balance";
 
@@ -22,6 +23,7 @@ export async function getRoomBalances(roomId: string, userId: string): Promise<B
   const settlements = await settlementRepo.findSettlementsByRoomId(roomId);
   const users = await userRepo.findUsersByIds(memberIds);
   const allCredits = await creditRepo.findCreditsByRoom(roomId);
+  const confirmedProposals = await proposalRepo.findConfirmedProposalsByRoom(roomId);
 
   return users.map((user) => {
     const { netBalance, totalOwedToUser, totalUserOwes } = computeNetBalance(
@@ -29,7 +31,8 @@ export async function getRoomBalances(roomId: string, userId: string): Promise<B
       expenses,
       participants,
       settlements,
-      allCredits
+      allCredits,
+      confirmedProposals
     );
     return {
       userId: user.id,
@@ -83,9 +86,25 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
     setDebt(payerId, p.userId, getDebt(payerId, p.userId) + effectiveShare);
   }
 
-  // Subtract settlements — when participant pays payer, their debt decreases
+  // Subtract settlements — when participant pays payer, their debt decreases.
+  // The portion of a settlement that confirmed a proposal was paid on behalf
+  // of someone else's credit — it must NOT reduce the payer's own debt to the
+  // payee. Its effect is reattributed by the SETTLED-credit adjustment below
+  // (it reduces the payer's credit debt to the credit holder instead).
+  const confirmedProposals = await proposalRepo.findConfirmedProposalsByRoom(roomId);
+  const proposalCoveredBySettlement = new Map<string, number>();
+  for (const pr of confirmedProposals) {
+    if (pr.confirmedSettlementId) {
+      proposalCoveredBySettlement.set(
+        pr.confirmedSettlementId,
+        (proposalCoveredBySettlement.get(pr.confirmedSettlementId) ?? 0) + pr.amount
+      );
+    }
+  }
   for (const s of settlements) {
-    setDebt(s.payeeId, s.payerId, getDebt(s.payeeId, s.payerId) - s.amount);
+    const ownPortion = s.amount - (proposalCoveredBySettlement.get(s.id) ?? 0);
+    if (ownPortion === 0) continue;
+    setDebt(s.payeeId, s.payerId, getDebt(s.payeeId, s.payerId) - ownPortion);
   }
 
   // Adjust for used credits — only SETTLED credits with confirmed participants count here.

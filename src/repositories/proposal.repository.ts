@@ -45,6 +45,18 @@ export async function findPendingProposalsByPair(
     );
 }
 
+export async function findConfirmedProposalsByRoom(roomId: string) {
+  return db
+    .select()
+    .from(settlementProposals)
+    .where(
+      and(
+        eq(settlementProposals.roomId, roomId),
+        eq(settlementProposals.status, "CONFIRMED")
+      )
+    );
+}
+
 export async function findProposalsByParticipantId(participantId: string) {
   return db
     .select()

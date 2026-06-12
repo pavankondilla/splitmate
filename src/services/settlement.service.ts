@@ -1,6 +1,7 @@
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import * as settlementRepo from "@/repositories/settlement.repository";
 import * as roomRepo from "@/repositories/room.repository";
+import * as proposalRepo from "@/repositories/proposal.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
 import { detectAndCreateCredit, consumeCreditsOnSettlement, confirmProposalsForSettlement } from "@/services/credit.service";
 
@@ -70,5 +71,28 @@ export async function getRoomSettlements(roomId: string, userId: string) {
   const membership = await roomRepo.findRoomMember(roomId, userId);
   if (!membership) throw new ForbiddenError();
 
-  return settlementRepo.findSettlementsByRoomId(roomId);
+  const settlements = await settlementRepo.findSettlementsByRoomId(roomId);
+
+  // Annotate each settlement with the portion that confirmed a proposal —
+  // that part was paid on behalf of someone else's credit, not the payer's
+  // own debt. The UI needs this to attribute shares and label the payment.
+  const confirmedProposals = await proposalRepo.findConfirmedProposalsByRoom(roomId);
+  const proposalsBySettlement = new Map<string, { amount: number; onBehalfOfUserId: string | null }>();
+  for (const pr of confirmedProposals) {
+    if (!pr.confirmedSettlementId) continue;
+    const existing = proposalsBySettlement.get(pr.confirmedSettlementId);
+    proposalsBySettlement.set(pr.confirmedSettlementId, {
+      amount: (existing?.amount ?? 0) + pr.amount,
+      onBehalfOfUserId: existing?.onBehalfOfUserId ?? pr.triggeredByUserId,
+    });
+  }
+
+  return settlements.map((s) => {
+    const proposal = proposalsBySettlement.get(s.id);
+    return {
+      ...s,
+      onBehalfOfAmount: proposal?.amount ?? 0,
+      onBehalfOfUserId: proposal?.onBehalfOfUserId ?? null,
+    };
+  });
 }

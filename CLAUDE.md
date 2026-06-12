@@ -414,4 +414,26 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ---
 
-*Last updated: Phase 18 — Complete. Credit system hardened. All balances correct. App stable at splitmate.co.in.*
+## Phase 19: Proposal Settlement Attribution
+
+**Bug:** When a proposal settlement was recorded (e.g. Aiverse pays Pavan ₹300 on behalf of Charan's credit), it was indistinguishable from Aiverse paying his own share. The ₹300 was counted twice in balances (once as the real settlement, once via virtual credit adjustments), and the Activity tab wrongly marked Aiverse's own share as settled.
+
+**Design principle:** Virtual credit adjustments (`virtualSettlementsPaid` / `virtualReceiptsFromCredits`) exist ONLY for the instant path (credit owed by the expense payer — no settlement row exists). Proposal-path credits resolve via a REAL settlement, which is already counted in `settlementsPaid`/`settlementsReceived` — virtuals must exclude proposal-covered portions.
+
+**Changes:**
+
+| Layer | Change |
+|---|---|
+| `lib/balance.ts` | `computeNetBalance` accepts `confirmedProposals`; subtracts proposal-covered amounts (per credit and per participant) from both virtual sums |
+| `balance.service.ts` | `getPairwiseBalances` excludes proposal-covered portions of settlements from the generic pair loop (the SETTLED-credit adjustment reattributes them to the credit pair) |
+| `dashboard.service.ts` | Now passes credits + confirmed proposals (was ignoring credits entirely) |
+| `settlement.service.ts` | `getRoomSettlements` annotates each settlement with `onBehalfOfAmount` / `onBehalfOfUserId` (derived from confirmed proposals via `confirmedSettlementId`) |
+| `expense-list.tsx` | `computeStatuses` only feeds the payer's OWN portion of a settlement into the share-matching pool; settlement cards show "Includes ₹X for Y's credit" |
+
+**No schema migration** — classification happens at read time via `settlement_proposals.confirmed_settlement_id`, which naturally handles a settlement that covers both a proposal and the payer's own share.
+
+**Verified with the 3-member scenario** (rent ₹9,000 + ₹1,000 overpayment + ₹900 groceries + credit apply + proposal settle): Aiverse −₹1,000, Charan +₹700, Pavan +₹300. Regression tests in `balance.test.ts` cover pre-confirmation, post-confirmation, and instant-path states.
+
+---
+
+*Last updated: Phase 19 — Complete. Proposal settlements correctly attributed. App stable at splitmate.co.in.*

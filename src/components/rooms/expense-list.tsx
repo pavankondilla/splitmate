@@ -24,6 +24,10 @@ interface Settlement {
   amount: number;
   note: string | null;
   settledAt: string;
+  // Portion of this settlement that confirmed a proposal — paid on behalf of
+  // someone else's credit, so it must not count toward the payer's own shares.
+  onBehalfOfAmount: number;
+  onBehalfOfUserId: string | null;
 }
 interface Member { id: string; name: string }
 
@@ -102,7 +106,12 @@ function computeStatuses(
 
     for (const s of settlements) {
       if (s.payerId === participantId && s.payeeId === payerId) {
-        events.push({ type: "settlement", amount: s.amount, time: new Date(s.settledAt).getTime() });
+        // Exclude the on-behalf-of portion — that money settled someone
+        // else's credit (via a proposal), not this participant's own shares.
+        const ownAmount = s.amount - s.onBehalfOfAmount;
+        if (ownAmount > 0) {
+          events.push({ type: "settlement", amount: ownAmount, time: new Date(s.settledAt).getTime() });
+        }
       }
     }
 
@@ -485,6 +494,15 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                             <span className="truncate">{isMyReceipt ? "You" : payeeName}</span>
                           </div>
                           {s.note && <p className="text-xs text-gray-500 mt-0.5 truncate">{s.note}</p>}
+                          {s.onBehalfOfAmount > 0 && (
+                            <p className="text-xs text-blue-600 mt-0.5">
+                              Includes {formatCurrency(s.onBehalfOfAmount)} for{" "}
+                              {s.onBehalfOfUserId === currentUserId
+                                ? "your"
+                                : `${memberMap.get(s.onBehalfOfUserId ?? "") ?? "a member"}'s`}{" "}
+                              credit
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
