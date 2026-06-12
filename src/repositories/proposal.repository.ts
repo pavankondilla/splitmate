@@ -71,22 +71,22 @@ export async function findProposalById(proposalId: string) {
   return result[0] ?? null;
 }
 
-export async function confirmProposalsForSettlement(
+// Returns proposals covered by the settlement amount (for service to process)
+export async function getProposalsToConfirm(
   roomId: string,
   payerId: string,
   payeeId: string,
-  settlementAmount: number,
-  settlementId: string
+  settlementAmount: number
 ) {
   const proposals = await findPendingProposalsByPair(roomId, payerId, payeeId);
-  if (proposals.length === 0) return;
-
+  const toConfirm = [];
   let remaining = settlementAmount;
   for (const proposal of proposals) {
     if (remaining <= 0) break;
     if (proposal.amount <= remaining) {
-      await updateProposalStatus(proposal.id, "CONFIRMED", settlementId);
+      toConfirm.push(proposal);
       remaining -= proposal.amount;
     }
   }
+  return toConfirm;
 }

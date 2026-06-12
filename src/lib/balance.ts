@@ -8,6 +8,7 @@ interface ParticipantRecord {
   userId: string;
   shareAmount: number;
   creditApplied: number;
+  creditConfirmed: boolean;
 }
 
 interface SettlementRecord {
@@ -20,6 +21,7 @@ interface CreditRecord {
   userId: string;
   owedByUserId: string;
   usedCredit: number;
+  status: string;
 }
 
 export function computeNetBalance(
@@ -47,22 +49,23 @@ export function computeNetBalance(
     .filter((s) => s.payerId === userId)
     .reduce((sum, s) => sum + s.amount, 0);
 
-  // Only the expense-auto-credited portion counts as virtual settlement paid.
+  // Only SETTLED credits count as virtual settlement paid.
+  // PENDING_SETTLEMENT credits are not yet finalized — don't count until proposal is confirmed.
   // Settlement-return portion is already in settlementsPaid — don't double-count.
   const expenseCreditUsedByUser = new Map<string, number>();
   for (const p of participants) {
-    if (p.creditApplied > 0) {
+    if (p.creditApplied > 0 && p.creditConfirmed) {
       expenseCreditUsedByUser.set(p.userId, (expenseCreditUsedByUser.get(p.userId) ?? 0) + p.creditApplied);
     }
   }
   const virtualSettlementsPaid = credits
-    .filter((c) => c.owedByUserId === userId)
+    .filter((c) => c.owedByUserId === userId && c.status === "SETTLED")
     .reduce((sum, c) => sum + Math.min(c.usedCredit, expenseCreditUsedByUser.get(c.userId) ?? 0), 0);
 
-  // When a participant's share in an expense paid by userId is covered by auto-credit,
-  // userId has effectively received that amount — reduce what they're still owed.
+  // Only count confirmed auto-credits as virtual receipts for the expense payer.
+  // Pending credits haven't been settled yet — payer is still owed that money.
   const virtualReceiptsFromCredits = participants
-    .filter((p) => p.userId !== userId && expensePaidByMap.get(p.expenseId) === userId)
+    .filter((p) => p.userId !== userId && expensePaidByMap.get(p.expenseId) === userId && p.creditConfirmed)
     .reduce((sum, p) => sum + p.creditApplied, 0);
 
   const netBalance =

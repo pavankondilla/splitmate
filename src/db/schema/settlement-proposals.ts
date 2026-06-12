@@ -3,6 +3,7 @@ import { users } from "./users";
 import { rooms } from "./rooms";
 import { userCredits } from "./user-credits";
 import { settlements } from "./settlements";
+import { expenseParticipants } from "./expense-participants";
 
 export const settlementProposals = pgTable("settlement_proposals", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -32,6 +33,9 @@ export const settlementProposals = pgTable("settlement_proposals", {
   // Set when a matching settlement confirms this proposal
   confirmedSettlementId: uuid("confirmed_settlement_id")
     .references(() => settlements.id),
+  // The participant share this proposal originated from (for creditConfirmed update on confirm)
+  participantId: uuid("participant_id")
+    .references(() => expenseParticipants.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

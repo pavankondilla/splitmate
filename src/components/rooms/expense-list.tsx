@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Trash2, ChevronDown, ChevronUp, CheckCircle2, Clock, Sparkles, Receipt, ArrowRight, Wallet } from "lucide-react";
 
-interface Participant { id: string; userId: string; shareAmount: number; creditApplied: number }
+interface Participant { id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }
 interface Expense {
   id: string;
   title: string;
@@ -341,8 +341,9 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                         const isPayer = p.userId === exp.paidBy;
                         const computedStatus = expStatuses?.get(p.userId);
                         // If credit was explicitly applied (stored in DB), override status
+                        // creditConfirmed=true → SETTLED (green), false → PENDING_SETTLEMENT (amber)
                         const status = p.creditApplied > 0
-                          ? { kind: "AUTO_CREDIT" as const, remainingCredit: 0 }
+                          ? { kind: p.creditConfirmed ? "AUTO_CREDIT_SETTLED" as const : "AUTO_CREDIT_PENDING" as const, remainingCredit: 0 }
                           : computedStatus;
 
                         const canApplyCredit =
@@ -369,6 +370,14 @@ export function ExpenseList({ roomId, expenses, settlements, members, currentUse
                               ) : status?.kind === "SETTLED" ? (
                                 <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
                                   <CheckCircle2 className="h-3.5 w-3.5" /> Settled
+                                </span>
+                              ) : status?.kind === "AUTO_CREDIT_SETTLED" ? (
+                                <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Credit settled
+                                </span>
+                              ) : status?.kind === "AUTO_CREDIT_PENDING" ? (
+                                <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                                  <Clock className="h-3.5 w-3.5" /> Credit pending
                                 </span>
                               ) : status?.kind === "AUTO_CREDIT" ? (
                                 <span className="flex items-center gap-1 text-xs font-medium text-blue-600">

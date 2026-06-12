@@ -1,4 +1,4 @@
-import { pgTable, uuid, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, integer, timestamp, boolean, text } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { rooms } from "./rooms";
 import { settlements } from "./settlements";
@@ -24,6 +24,8 @@ export const userCredits = pgTable("user_credits", {
     .references(() => users.id)
     .notNull(),
   isExhausted: boolean("is_exhausted").default(false).notNull(),
+  // ACTIVE | PENDING_SETTLEMENT | SETTLED
+  status: text("status").notNull().default("ACTIVE"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

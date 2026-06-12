@@ -49,6 +49,24 @@ export async function updateCreditUsed(creditId: string, usedCredit: number, isE
   return result[0];
 }
 
+export async function updateCreditStatus(creditId: string, status: "ACTIVE" | "PENDING_SETTLEMENT" | "SETTLED") {
+  const result = await db
+    .update(userCredits)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(userCredits.id, creditId))
+    .returning();
+  return result[0];
+}
+
+export async function confirmParticipantCredit(participantId: string) {
+  const result = await db
+    .update(expenseParticipants)
+    .set({ creditConfirmed: true })
+    .where(eq(expenseParticipants.id, participantId))
+    .returning();
+  return result[0];
+}
+
 export async function findParticipantById(participantId: string) {
   const result = await db
     .select()

@@ -15,6 +15,8 @@ export const expenseParticipants = pgTable("expense_participants", {
   isSettled: boolean("is_settled").default(false).notNull(),
   // Amount covered by user's credit pool (0 = none, >0 = AUTO_CREDITED)
   creditApplied: integer("credit_applied").default(0).notNull(),
+  // True once the settlement proposal for this credit is confirmed (or when no proposal needed)
+  creditConfirmed: boolean("credit_confirmed").default(false).notNull(),
 });
 
 export type ExpenseParticipant = typeof expenseParticipants.$inferSelect;

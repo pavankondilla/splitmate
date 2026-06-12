@@ -88,16 +88,18 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
     setDebt(s.payeeId, s.payerId, getDebt(s.payeeId, s.payerId) - s.amount);
   }
 
-  // Adjust for used credits — only expense-auto-credited portion counts here.
+  // Adjust for used credits — only SETTLED credits with confirmed participants count here.
+  // PENDING_SETTLEMENT credits are not finalized; exclude until proposal is confirmed.
   // Settlement-return portion is already captured in the settlements loop above.
   const expenseCreditUsed = new Map<string, number>();
   for (const p of participants) {
-    if (p.creditApplied > 0) {
+    if (p.creditApplied > 0 && p.creditConfirmed) {
       expenseCreditUsed.set(p.userId, (expenseCreditUsed.get(p.userId) ?? 0) + p.creditApplied);
     }
   }
   const allCredits = await creditRepo.findCreditsByRoom(roomId);
   for (const credit of allCredits) {
+    if (credit.status !== "SETTLED") continue;
     const autoUsed = Math.min(credit.usedCredit, expenseCreditUsed.get(credit.userId) ?? 0);
     if (autoUsed > 0) {
       setDebt(credit.owedByUserId, credit.userId,

@@ -7,6 +7,25 @@ import * as proposalRepo from "@/repositories/proposal.repository";
 import * as userRepo from "@/repositories/user.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
 
+export async function confirmProposalsForSettlement(
+  roomId: string,
+  payerId: string,
+  payeeId: string,
+  settlementAmount: number,
+  settlementId: string
+) {
+  const toConfirm = await proposalRepo.getProposalsToConfirm(roomId, payerId, payeeId, settlementAmount);
+  for (const proposal of toConfirm) {
+    await proposalRepo.updateProposalStatus(proposal.id, "CONFIRMED", settlementId);
+    if (proposal.sourceCreditId) {
+      await creditRepo.updateCreditStatus(proposal.sourceCreditId, "SETTLED");
+    }
+    if (proposal.participantId) {
+      await creditRepo.confirmParticipantCredit(proposal.participantId);
+    }
+  }
+}
+
 // Called after every settlement is recorded.
 // Checks if the payer overpaid their actual debt to the payee for this pair.
 // If so, creates a user_credit record for the surplus.
@@ -162,14 +181,20 @@ export async function applyCredit(
   // Mark the participant share as credited
   const updated = await creditRepo.applyParticipantCredit(input.expenseParticipantId, applyAmount);
 
-  // Create settlement proposals: for each credit consumed, if owedByUserId !== expense paidBy,
-  // the debtor (owedByUserId) should pay the expense payer directly.
+  // For each credit consumed:
+  // - If owedByUserId === expense.paidBy: no proposal needed, settle immediately
+  // - Else: mark PENDING_SETTLEMENT, create a proposal for the debtor to pay the expense payer
   const expense = await expenseRepo.findExpenseById(participant.expenseId);
   if (expense) {
     const applierUser = await userRepo.findUserById(userId);
     const applierName = applierUser?.name ?? "A member";
     for (const { creditId, owedByUserId, deductAmount } of creditsConsumed) {
-      if (owedByUserId !== expense.paidBy) {
+      if (owedByUserId === expense.paidBy) {
+        // Debtor IS the expense payer — credit directly offsets the debt, no proposal needed
+        await creditRepo.updateCreditStatus(creditId, "SETTLED");
+        await creditRepo.confirmParticipantCredit(participant.id);
+      } else {
+        await creditRepo.updateCreditStatus(creditId, "PENDING_SETTLEMENT");
         await proposalRepo.createProposal({
           roomId,
           fromUserId: owedByUserId,
@@ -178,6 +203,7 @@ export async function applyCredit(
           reason: `${applierName} applied ₹${(deductAmount / 100).toLocaleString("en-IN")} credit to "${expense.title}"`,
           triggeredByUserId: userId,
           sourceCreditId: creditId,
+          participantId: participant.id,
           status: "PROPOSED",
         });
       }
