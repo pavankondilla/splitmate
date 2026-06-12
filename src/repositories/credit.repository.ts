@@ -40,6 +40,15 @@ export async function findCreditsByRoom(roomId: string) {
     .where(eq(userCredits.roomId, roomId));
 }
 
+export async function findCreditById(creditId: string) {
+  const result = await db
+    .select()
+    .from(userCredits)
+    .where(eq(userCredits.id, creditId))
+    .limit(1);
+  return result[0] ?? null;
+}
+
 export async function updateCreditUsed(creditId: string, usedCredit: number, isExhausted: boolean) {
   const result = await db
     .update(userCredits)
@@ -62,6 +71,15 @@ export async function confirmParticipantCredit(participantId: string) {
   const result = await db
     .update(expenseParticipants)
     .set({ creditConfirmed: true })
+    .where(eq(expenseParticipants.id, participantId))
+    .returning();
+  return result[0];
+}
+
+export async function resetParticipantCredit(participantId: string) {
+  const result = await db
+    .update(expenseParticipants)
+    .set({ creditApplied: 0, creditConfirmed: false })
     .where(eq(expenseParticipants.id, participantId))
     .returning();
   return result[0];

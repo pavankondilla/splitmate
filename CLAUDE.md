@@ -402,4 +402,16 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 
 ---
 
-*Last updated: Phase 16 — Complete. Credit system fully synced. All balances correct. App stable at splitmate.co.in.*
+## Phase 18: Credit System Hardening
+
+| Issue | Fix |
+|---|---|
+| Settlement for normal expense debt wrongly consumed payee's credit | `consumeCreditsOnSettlement` now only consumes the surplus portion of a settlement beyond the payer's effective expense debt (`computeCreditReturnPortion` in `lib/credit.ts`, unit-tested) |
+| Deleting an expense orphaned applied credit | `restoreCreditsForDeletedExpense`: dismisses PROPOSED proposals + refunds their credit, refunds instant-settled credit, resets participant credit fields. CONFIRMED proposals (real money moved) untouched. Called from `deleteExpense`. |
+| `creditConfirmed` set while proposals still pending (mixed credit sources) | `applyCredit` confirms the share only if zero proposals were created; `confirmProposalsForSettlement` confirms only when the last pending proposal for that share resolves |
+| Credit hook failure could fail an already-recorded settlement | Hooks in `recordSettlement` are best-effort with error logging (neon-http has no transactions; balances derive from raw ledger so they stay correct) |
+| Stray debug file `D:SplitMatequery-room.js` in root | Moved to `scripts/query-room.js`; `.claude/` gitignored |
+
+---
+
+*Last updated: Phase 18 — Complete. Credit system hardened. All balances correct. App stable at splitmate.co.in.*

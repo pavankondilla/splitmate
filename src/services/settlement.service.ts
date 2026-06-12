@@ -36,14 +36,32 @@ export async function recordSettlement(userId: string, roomId: string, data: Rec
     metadata: { payerId: data.payerId, payeeId: data.payeeId, amount: data.amount },
   });
 
+  // The credit hooks below are best-effort: the neon-http driver doesn't
+  // support transactions, so a hook failure must not fail (or roll back) the
+  // already-recorded settlement. Balances stay correct either way — they are
+  // derived from raw expenses + settlements, credits are auxiliary.
+  const runHook = async (name: string, hook: () => Promise<unknown>) => {
+    try {
+      await hook();
+    } catch (err) {
+      console.error(`[settlement ${settlement.id}] credit hook "${name}" failed:`, err);
+    }
+  };
+
   // Auto-detect overpayment and create credit record if applicable
-  await detectAndCreateCredit(settlement.id, data.payerId, data.payeeId, roomId);
+  await runHook("detectAndCreateCredit", () =>
+    detectAndCreateCredit(settlement.id, data.payerId, data.payeeId, roomId)
+  );
 
   // Consume payee's existing credits if payer is returning overpayment
-  await consumeCreditsOnSettlement(data.payerId, data.payeeId, data.amount, roomId);
+  await runHook("consumeCreditsOnSettlement", () =>
+    consumeCreditsOnSettlement(data.payerId, data.payeeId, data.amount, roomId)
+  );
 
   // Confirm matching proposals and update credit/participant status
-  await confirmProposalsForSettlement(roomId, data.payerId, data.payeeId, data.amount, settlement.id);
+  await runHook("confirmProposalsForSettlement", () =>
+    confirmProposalsForSettlement(roomId, data.payerId, data.payeeId, data.amount, settlement.id)
+  );
 
   return settlement;
 }

@@ -45,6 +45,25 @@ export async function findPendingProposalsByPair(
     );
 }
 
+export async function findProposalsByParticipantId(participantId: string) {
+  return db
+    .select()
+    .from(settlementProposals)
+    .where(eq(settlementProposals.participantId, participantId));
+}
+
+export async function findPendingProposalsByParticipantId(participantId: string) {
+  return db
+    .select()
+    .from(settlementProposals)
+    .where(
+      and(
+        eq(settlementProposals.participantId, participantId),
+        eq(settlementProposals.status, "PROPOSED")
+      )
+    );
+}
+
 export async function updateProposalStatus(
   proposalId: string,
   status: "CONFIRMED" | "DISMISSED",

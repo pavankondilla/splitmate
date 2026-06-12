@@ -6,6 +6,7 @@ import * as roomRepo from "@/repositories/room.repository";
 import * as proposalRepo from "@/repositories/proposal.repository";
 import * as userRepo from "@/repositories/user.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
+import { computeCreditReturnPortion } from "@/lib/credit";
 
 export async function confirmProposalsForSettlement(
   roomId: string,
@@ -21,7 +22,13 @@ export async function confirmProposalsForSettlement(
       await creditRepo.updateCreditStatus(proposal.sourceCreditId, "SETTLED");
     }
     if (proposal.participantId) {
-      await creditRepo.confirmParticipantCredit(proposal.participantId);
+      // A share can be covered by multiple credits, each with its own proposal.
+      // creditConfirmed covers the whole creditApplied amount, so only confirm
+      // once every proposal for this share has been resolved.
+      const stillPending = await proposalRepo.findPendingProposalsByParticipantId(proposal.participantId);
+      if (stillPending.length === 0) {
+        await creditRepo.confirmParticipantCredit(proposal.participantId);
+      }
     }
   }
 }
@@ -102,8 +109,10 @@ export async function getTotalAvailableCredit(userId: string, roomId: string): P
 }
 
 // Called after a settlement is recorded.
-// If the payee has credits with owedByUserId = payer, reduce them by the settlement amount.
-// This handles the case where payer is "returning" overpayment credit back to payee.
+// If the payee has credits with owedByUserId = payer, the payer may be
+// "returning" overpayment credit back to the payee — but only the portion of
+// the settlement that exceeds the payer's outstanding expense debt counts.
+// A payment covering normal expense shares must not consume the payee's credits.
 export async function consumeCreditsOnSettlement(
   payerId: string,
   payeeId: string,
@@ -115,7 +124,24 @@ export async function consumeCreditsOnSettlement(
   const activeCredits = credits.filter((c) => !c.isExhausted);
   if (activeCredits.length === 0) return;
 
-  let remaining = settlementAmount;
+  const expenses = await expenseRepo.findExpensesByRoomId(roomId);
+  const expenseIds = expenses.map((e) => e.id);
+  const participants = await expenseRepo.findParticipantsByExpenseIds(expenseIds);
+  const allSettlements = await settlementRepo.findSettlementsByRoomId(roomId);
+
+  // Payer's expense debt to payee, net of credit already applied to those shares
+  const paidByMap = new Map(expenses.map((e) => [e.id, e.paidBy]));
+  const totalEffectiveOwed = participants
+    .filter((p) => p.userId === payerId && paidByMap.get(p.expenseId) === payeeId)
+    .reduce((sum, p) => sum + Math.max(0, p.shareAmount - p.creditApplied), 0);
+
+  // Includes the settlement just recorded (this runs after it is created)
+  const totalPaid = allSettlements
+    .filter((s) => s.payerId === payerId && s.payeeId === payeeId)
+    .reduce((sum, s) => sum + s.amount, 0);
+
+  let remaining = computeCreditReturnPortion(settlementAmount, totalEffectiveOwed, totalPaid);
+  if (remaining <= 0) return;
   for (const credit of activeCredits) {
     if (remaining <= 0) break;
     const available = credit.totalCredit - credit.usedCredit;
@@ -127,6 +153,78 @@ export async function consumeCreditsOnSettlement(
     await creditRepo.updateCreditUsed(credit.id, newUsed, isExhausted);
     remaining -= consume;
   }
+}
+
+// Reduces a credit's usedCredit by the given amount, reactivating it if it
+// was exhausted or settled and now has available balance again.
+async function refundCredit(creditId: string, amount: number) {
+  const credit = await creditRepo.findCreditById(creditId);
+  if (!credit || amount <= 0) return 0;
+
+  const refund = Math.min(credit.usedCredit, amount);
+  if (refund <= 0) return 0;
+
+  const newUsed = credit.usedCredit - refund;
+  await creditRepo.updateCreditUsed(credit.id, newUsed, newUsed >= credit.totalCredit);
+  if (credit.status !== "ACTIVE" && newUsed < credit.totalCredit) {
+    await creditRepo.updateCreditStatus(credit.id, "ACTIVE");
+  }
+  return refund;
+}
+
+// Unwinds credit applied to an expense's shares when the expense is deleted.
+// Pending proposals are dismissed and their credit refunded. Portions already
+// settled with real money (confirmed proposals) are left untouched — the cash
+// moved, so the ledger must keep reflecting it.
+// Returns the total amount of credit restored (paise).
+export async function restoreCreditsForDeletedExpense(expenseId: string) {
+  const expense = await expenseRepo.findExpenseById(expenseId);
+  if (!expense) return 0;
+
+  const participants = await expenseRepo.findParticipantsByExpenseId(expenseId);
+  let totalRestored = 0;
+
+  for (const p of participants) {
+    if (p.creditApplied <= 0) continue;
+
+    const proposals = await proposalRepo.findProposalsByParticipantId(p.id);
+    let pendingRefunded = 0;
+    let confirmedAmount = 0;
+
+    for (const proposal of proposals) {
+      if (proposal.status === "PROPOSED") {
+        await proposalRepo.updateProposalStatus(proposal.id, "DISMISSED");
+        if (proposal.sourceCreditId) {
+          await refundCredit(proposal.sourceCreditId, proposal.amount);
+        }
+        pendingRefunded += proposal.amount;
+      } else if (proposal.status === "CONFIRMED") {
+        confirmedAmount += proposal.amount;
+      }
+    }
+
+    // Whatever remains was instantly settled against credits owed by the
+    // expense payer — refund those (settled ones first, best effort).
+    let remainder = p.creditApplied - pendingRefunded - confirmedAmount;
+    let instantRefunded = 0;
+    if (remainder > 0) {
+      const credits = await creditRepo.findCreditsByUserRoomAndOwedBy(p.userId, expense.roomId, expense.paidBy);
+      const ordered = [...credits].sort(
+        (a, b) => Number(b.status === "SETTLED") - Number(a.status === "SETTLED")
+      );
+      for (const credit of ordered) {
+        if (remainder <= 0) break;
+        const refunded = await refundCredit(credit.id, remainder);
+        remainder -= refunded;
+        instantRefunded += refunded;
+      }
+    }
+
+    await creditRepo.resetParticipantCredit(p.id);
+    totalRestored += pendingRefunded + instantRefunded;
+  }
+
+  return totalRestored;
 }
 
 export interface ApplyCreditInput {
@@ -188,12 +286,13 @@ export async function applyCredit(
   if (expense) {
     const applierUser = await userRepo.findUserById(userId);
     const applierName = applierUser?.name ?? "A member";
+    let proposalsCreated = 0;
     for (const { creditId, owedByUserId, deductAmount } of creditsConsumed) {
       if (owedByUserId === expense.paidBy) {
         // Debtor IS the expense payer — credit directly offsets the debt, no proposal needed
         await creditRepo.updateCreditStatus(creditId, "SETTLED");
-        await creditRepo.confirmParticipantCredit(participant.id);
       } else {
+        proposalsCreated++;
         await creditRepo.updateCreditStatus(creditId, "PENDING_SETTLEMENT");
         await proposalRepo.createProposal({
           roomId,
@@ -207,6 +306,12 @@ export async function applyCredit(
           status: "PROPOSED",
         });
       }
+    }
+    // creditConfirmed is a single flag covering the whole creditApplied amount —
+    // only confirm now if no portion is awaiting a settlement proposal. Otherwise
+    // confirmation happens when the last pending proposal is confirmed.
+    if (proposalsCreated === 0) {
+      await creditRepo.confirmParticipantCredit(participant.id);
     }
   }
 

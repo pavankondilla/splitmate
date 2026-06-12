@@ -3,6 +3,7 @@ import * as expenseRepo from "@/repositories/expense.repository";
 import * as roomRepo from "@/repositories/room.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
 import { calculateEqualShares } from "@/lib/split";
+import { restoreCreditsForDeletedExpense } from "@/services/credit.service";
 import type { ExpenseCategory, SplitType } from "@/types/domain";
 
 export interface AddExpenseInput {
@@ -90,6 +91,10 @@ export async function deleteExpense(expenseId: string, userId: string) {
     throw new ForbiddenError("Only the creator or an admin can delete this expense");
   }
 
+  // Refund credit applied to this expense's shares before it disappears,
+  // otherwise the consumed credit is orphaned and lost.
+  const creditRestored = await restoreCreditsForDeletedExpense(expenseId);
+
   await expenseRepo.softDeleteExpense(expenseId);
 
   await logActivity({
@@ -98,6 +103,6 @@ export async function deleteExpense(expenseId: string, userId: string) {
     action: "EXPENSE_DELETED",
     entityType: "expense",
     entityId: expenseId,
-    metadata: { title: expense.title, amount: expense.amount },
+    metadata: { title: expense.title, amount: expense.amount, creditRestored },
   });
 }
