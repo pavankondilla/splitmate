@@ -440,7 +440,7 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
                           shown once per pair on the most recent expense card */}
                       {(() => {
                         const creditHolders = exp.participants
-                          .filter((p) => p.userId !== exp.paidBy)
+                          .filter((p) => p.userId !== exp.paidBy && p.creditApplied > 0)
                           .flatMap((p) => {
                             const pairKey = `${exp.paidBy}|${p.userId}`;
                             if (latestExpenseForPair.get(pairKey)?.expId !== exp.id) return [];
