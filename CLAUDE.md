@@ -263,6 +263,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 33 | Onboarding / Empty-State CTAs | **Complete** |
 | 34 | Rate Limiting (Upstash) | **Complete** |
 | 35 | Stale Credit Display Fix + Tab Reorder | **Complete** |
+| 36 | Balance Calculation Fix (findAllCreditsByRoom) | **Complete** |
 
 ---
 
@@ -496,7 +497,7 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 35 — Complete. Stale credit display fix + tab reorder.*
+*Last updated: Phase 36 — Complete. Balance calculation fix for post-credit phantom debt.*
 
 ---
 
@@ -538,3 +539,33 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | DB-level filter | `credit.repository.ts` → `findCreditsByRoom` | Added `isExhausted = false` AND `status != 'SETTLED'` filters — dead credits never reach the UI |
 
 **Tab reorder:** Activity is now the default first tab (was Balances). Order: Activity → Balances → Members. Change in `room-tabs.tsx` (`defaultValue` + trigger order).
+
+---
+
+## Phase 36: Balance Calculation Fix (findAllCreditsByRoom)
+
+**Bug:** After B applied credit to an expense paid by A (instant path), A's balance incorrectly showed "pay ₹X to B" even though everything was settled.
+
+**Example scenario:**
+- A pays rent ₹9,000 (split 3 ways). B pays A ₹3,500 (₹500 overpayment → B's credit).
+- A pays wifi ₹1,500. B applies ₹500 credit to wifi share.
+- A's balance showed −₹500 (owes B ₹500). Correct answer: ₹0.
+
+**Root cause:** Phase 35 added `isExhausted = false` AND `status != 'SETTLED'` filters to `findCreditsByRoom` to prevent stale credits from appearing in the UI. However, `balance.service.ts` and `dashboard.service.ts` used that same filtered query for balance *calculation*. The balance formula has two virtual adjustments that must cancel each other:
+
+| Adjustment | Source | After Phase 35 filter |
+|---|---|---|
+| `virtualReceiptsFromCredits` (for expense payer A) | Reads from `expense_participants` — not filtered | Still −₹500 |
+| `virtualSettlementsPaid` (for A as credit's owedByUserId) | Reads from credit records — filtered out | **0** (should be +₹500) |
+
+With SETTLED credits excluded, `virtualReceiptsFromCredits` deducted ₹500 from A's receivables but `virtualSettlementsPaid` could no longer add ₹500 back. The same bug affected `getPairwiseBalances` and dashboard balance.
+
+**Fix:**
+
+| Layer | File | Change |
+|---|---|---|
+| New repository function | `credit.repository.ts` | Added `findAllCreditsByRoom` — no exhausted/status filter, used only for balance math |
+| Balance calculation | `balance.service.ts` (`getRoomBalances`, `getPairwiseBalances`) | Switched from `findCreditsByRoom` to `findAllCreditsByRoom` |
+| Dashboard calculation | `dashboard.service.ts` | Switched from `findCreditsByRoom` to `findAllCreditsByRoom` |
+
+`findCreditsByRoom` (filtered) remains in use only by `credit.service.ts` → `getRoomCredits` for UI display.
