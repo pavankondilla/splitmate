@@ -62,9 +62,9 @@ export default function TermsPage() {
           <ul className="list-disc pl-5 space-y-1.5 mt-2">
             <li>Record fraudulent, fictitious, or misleading expenses to deceive other room members</li>
             <li>Harass, impersonate, or harm other users</li>
-            <li>Attempt to gain unauthorised access to another user's rooms or data</li>
+            <li>Attempt to gain unauthorised access to another user&apos;s rooms or data</li>
             <li>Use the Service in any way that violates applicable Indian or local laws</li>
-            <li>Reverse-engineer, scrape, or otherwise exploit the Service's API beyond its intended use</li>
+            <li>Reverse-engineer, scrape, or otherwise exploit the Service&apos;s API beyond its intended use</li>
           </ul>
           <p className="mt-3">
             We reserve the right to suspend or terminate accounts that violate these terms without notice.
