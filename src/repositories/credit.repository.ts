@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { userCredits, expenseParticipants, type NewUserCredit } from "@/db/schema";
 
@@ -37,7 +37,13 @@ export async function findCreditsByRoom(roomId: string) {
   return db
     .select()
     .from(userCredits)
-    .where(eq(userCredits.roomId, roomId));
+    .where(
+      and(
+        eq(userCredits.roomId, roomId),
+        eq(userCredits.isExhausted, false),
+        ne(userCredits.status, "SETTLED")
+      )
+    );
 }
 
 export async function findCreditById(creditId: string) {

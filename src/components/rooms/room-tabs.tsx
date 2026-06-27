@@ -55,12 +55,12 @@ export function RoomTabs({ roomId, roomName, inviteCode, members, expenses, sett
 
   return (
     <>
-    <Tabs defaultValue="balances">
+    <Tabs defaultValue="expenses">
       <div className="flex items-center justify-between mb-4">
         <TabsList className="bg-gray-100">
+          <TabsTrigger value="expenses">Activity</TabsTrigger>
           <TabsTrigger value="balances">Balances</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
-          <TabsTrigger value="expenses">Activity</TabsTrigger>
         </TabsList>
         <div className="flex gap-2">
           {currentUserRole === "admin" && (

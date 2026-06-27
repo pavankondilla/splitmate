@@ -19,6 +19,10 @@ export async function confirmProposalsForSettlement(
   for (const proposal of toConfirm) {
     await proposalRepo.updateProposalStatus(proposal.id, "CONFIRMED", settlementId);
     if (proposal.sourceCreditId) {
+      const credit = await creditRepo.findCreditById(proposal.sourceCreditId);
+      if (credit) {
+        await creditRepo.updateCreditUsed(proposal.sourceCreditId, credit.totalCredit, true);
+      }
       await creditRepo.updateCreditStatus(proposal.sourceCreditId, "SETTLED");
     }
     if (proposal.participantId) {
@@ -160,17 +164,28 @@ export async function consumeCreditsOnSettlement(
     .reduce((sum, s) => sum + s.amount, 0);
 
   let remaining = computeCreditReturnPortion(settlementAmount, totalEffectiveOwed, totalPaid);
-  if (remaining <= 0) return;
-  for (const credit of activeCredits) {
-    if (remaining <= 0) break;
-    const available = credit.totalCredit - credit.usedCredit;
-    if (available <= 0) continue;
 
-    const consume = Math.min(available, remaining);
-    const newUsed = credit.usedCredit + consume;
-    const isExhausted = newUsed >= credit.totalCredit;
-    await creditRepo.updateCreditUsed(credit.id, newUsed, isExhausted);
-    remaining -= consume;
+  // Consume credits proportional to how much of this settlement is an overpayment return
+  if (remaining > 0) {
+    for (const credit of activeCredits) {
+      if (remaining <= 0) break;
+      const available = credit.totalCredit - credit.usedCredit;
+      if (available <= 0) continue;
+
+      const consume = Math.min(available, remaining);
+      const newUsed = credit.usedCredit + consume;
+      const isExhausted = newUsed >= credit.totalCredit;
+      await creditRepo.updateCreditUsed(credit.id, newUsed, isExhausted);
+      remaining -= consume;
+    }
+  }
+
+  // If payer has now fully covered their expense debt, any leftover partial
+  // credit can never be applied again — exhaust it so it stops showing in the UI.
+  if (totalPaid >= totalEffectiveOwed) {
+    for (const credit of activeCredits) {
+      await creditRepo.updateCreditUsed(credit.id, credit.totalCredit, true);
+    }
   }
 }
 
