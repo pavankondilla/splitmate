@@ -29,7 +29,7 @@ export async function getDashboard(userId: string): Promise<DashboardSummary> {
         roomRepo.findRoomMembers(room.id),
         expenseRepo.findExpensesByRoomId(room.id),
         settlementRepo.findSettlementsByRoomId(room.id),
-        creditRepo.findCreditsByRoom(room.id),
+        creditRepo.findAllCreditsByRoom(room.id),
         proposalRepo.findConfirmedProposalsByRoom(room.id),
       ]);
 

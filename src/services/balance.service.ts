@@ -22,7 +22,7 @@ export async function getRoomBalances(roomId: string, userId: string): Promise<B
   const participants = await expenseRepo.findParticipantsByExpenseIds(expenseIds);
   const settlements = await settlementRepo.findSettlementsByRoomId(roomId);
   const users = await userRepo.findUsersByIds(memberIds);
-  const allCredits = await creditRepo.findCreditsByRoom(roomId);
+  const allCredits = await creditRepo.findAllCreditsByRoom(roomId);
   const confirmedProposals = await proposalRepo.findConfirmedProposalsByRoom(roomId);
 
   return users.map((user) => {
@@ -116,7 +116,7 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
       expenseCreditUsed.set(p.userId, (expenseCreditUsed.get(p.userId) ?? 0) + p.creditApplied);
     }
   }
-  const allCredits = await creditRepo.findCreditsByRoom(roomId);
+  const allCredits = await creditRepo.findAllCreditsByRoom(roomId);
   for (const credit of allCredits) {
     if (credit.status !== "SETTLED") continue;
     const autoUsed = Math.min(credit.usedCredit, expenseCreditUsed.get(credit.userId) ?? 0);

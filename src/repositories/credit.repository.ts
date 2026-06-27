@@ -33,6 +33,7 @@ export async function findCreditsByUserRoomAndOwedBy(userId: string, roomId: str
     );
 }
 
+// UI display only — excludes exhausted/settled credits so stale records don't appear.
 export async function findCreditsByRoom(roomId: string) {
   return db
     .select()
@@ -44,6 +45,15 @@ export async function findCreditsByRoom(roomId: string) {
         ne(userCredits.status, "SETTLED")
       )
     );
+}
+
+// Balance calculation — needs all credits including SETTLED ones so the
+// virtualSettlementsPaid / virtualReceiptsFromCredits pair can cancel correctly.
+export async function findAllCreditsByRoom(roomId: string) {
+  return db
+    .select()
+    .from(userCredits)
+    .where(eq(userCredits.roomId, roomId));
 }
 
 export async function findCreditById(creditId: string) {
