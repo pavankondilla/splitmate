@@ -180,11 +180,16 @@ export async function consumeCreditsOnSettlement(
     }
   }
 
-  // If payer has now fully covered their expense debt, any leftover partial
-  // credit can never be applied again — exhaust it so it stops showing in the UI.
-  if (totalPaid >= totalEffectiveOwed) {
+  // If payer has now fully covered their expense debt, any leftover PARTIAL
+  // credit (usedCredit > 0) can never be applied again — exhaust it.
+  // Fresh credits (usedCredit === 0) are untouched: they remain valid for
+  // future expenses. This guards against totalEffectiveOwed=0 making any
+  // A→B settlement incorrectly exhaust unrelated credits held by B.
+  if (totalEffectiveOwed > 0 && totalPaid >= totalEffectiveOwed) {
     for (const credit of activeCredits) {
-      await creditRepo.updateCreditUsed(credit.id, credit.totalCredit, true);
+      if (credit.usedCredit > 0) {
+        await creditRepo.updateCreditUsed(credit.id, credit.totalCredit, true);
+      }
     }
   }
 }
