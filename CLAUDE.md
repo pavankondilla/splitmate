@@ -264,6 +264,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 34 | Rate Limiting (Upstash) | **Complete** |
 | 35 | Stale Credit Display Fix + Tab Reorder | **Complete** |
 | 36 | Balance Calculation Fix (findAllCreditsByRoom) | **Complete** |
+| 37 | Credit Force-Exhaust Bug Fix (Apply Credit button missing) | **Complete** |
 
 ---
 
@@ -497,7 +498,7 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 36 — Complete. Balance calculation fix for post-credit phantom debt.*
+*Last updated: Phase 37 — Complete. Credit force-exhaust bug fix (Apply Credit button missing).*
 
 ---
 
@@ -569,3 +570,50 @@ With SETTLED credits excluded, `virtualReceiptsFromCredits` deducted ₹500 from
 | Dashboard calculation | `dashboard.service.ts` | Switched from `findCreditsByRoom` to `findAllCreditsByRoom` |
 
 `findCreditsByRoom` (filtered) remains in use only by `credit.service.ts` → `getRoomCredits` for UI display.
+
+---
+
+## Phase 37: Credit Force-Exhaust Bug Fix (Apply Credit Button Missing)
+
+**Bug:** B has ₹400 credit visible in the balance/banner, but no "Apply Credit" button appears on any expense card.
+
+**Root cause:** Phase 35 added a force-exhaust block at the end of `consumeCreditsOnSettlement`:
+
+```javascript
+if (totalPaid >= totalEffectiveOwed) {
+  for (const credit of activeCredits) {
+    await creditRepo.updateCreditUsed(credit.id, credit.totalCredit, true);
+  }
+}
+```
+
+`activeCredits` = payee B's credits owed by payer A. When A makes ANY settlement to B (e.g. paying A's own expense share to B), and `totalEffectiveOwed = 0` (B has never paid any shared expense, so A has no expense debt to B), the condition `totalPaid >= 0` is trivially TRUE. This exhausted ALL of B's active credits — including a fresh ₹400 credit from B overpaying A for rent — even though the settlement had nothing to do with those credits.
+
+**Result:** `findCreditsByRoom` filters `isExhausted = true` credits, so `availableCredit = 0` in `ExpenseList`, and `canApplyCredit` returns false → no button.
+
+**Fix:** Two guards added in `credit.service.ts` → `consumeCreditsOnSettlement`:
+
+1. `totalEffectiveOwed > 0` — skips the entire force-exhaust block when the payer has no expense debt to the payee, preventing the `0 >= 0` always-true trap.
+2. `credit.usedCredit > 0` — only exhausts partially-consumed credits (the original Phase 35 intent: stale leftover fractions). Fresh credits (`usedCredit === 0`) are untouched and remain valid for future expense applications.
+
+```javascript
+// Before (bug):
+if (totalPaid >= totalEffectiveOwed) {
+  for (const credit of activeCredits) {
+    await creditRepo.updateCreditUsed(credit.id, credit.totalCredit, true);
+  }
+}
+
+// After (fix):
+if (totalEffectiveOwed > 0 && totalPaid >= totalEffectiveOwed) {
+  for (const credit of activeCredits) {
+    if (credit.usedCredit > 0) {
+      await creditRepo.updateCreditUsed(credit.id, credit.totalCredit, true);
+    }
+  }
+}
+```
+
+**Phase 35 behavior preserved:** Partially-consumed credits (`usedCredit > 0`) are still exhausted when the payer has fully paid their expense debt — the original stale-credit scenario still works correctly.
+
+**File changed:** `src/services/credit.service.ts` only. No schema migration needed.
