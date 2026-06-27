@@ -4,7 +4,9 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { Trash2, ChevronDown, ChevronUp, CheckCircle2, Clock, Receipt, ArrowRight, Wallet } from "lucide-react";
+import { Trash2, Pencil, ChevronDown, ChevronUp, CheckCircle2, Clock, Receipt, ArrowRight, Wallet } from "lucide-react";
+import { EditExpenseDialog } from "@/components/rooms/edit-expense-dialog";
+import { AddExpenseDialog } from "@/components/rooms/add-expense-dialog";
 
 interface Participant { id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }
 interface Expense {
@@ -14,6 +16,7 @@ interface Expense {
   category: string;
   paidBy: string;
   expenseDate: string;
+  notes: string | null;
   // When the expense was actually entered. Event ordering must use this, not
   // expenseDate: the date has no clock time (sorts at midnight) and can be
   // backdated, which would wrongly place expenses before settlements that
@@ -162,12 +165,16 @@ function computeStatuses(
   return result;
 }
 
+const PAGE_SIZE = 20;
+
 export function ExpenseList({ roomId, expenses, settlements, credits, members, currentUserId, currentUserRole }: ExpenseListProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
   const [showSettlements, setShowSettlements] = useState(false);
   const [applyingCredit, setApplyingCredit] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
   const statusMap = useMemo(() => computeStatuses(expenses, settlements), [expenses, settlements]);
@@ -225,7 +232,8 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
     }
   }
 
-  // Group expenses by date label, sorted newest first
+  // Group ALL expenses by date label, sorted newest first.
+  // computeStatuses still uses the full expenses array — grouping is display-only.
   const expenseGroups = useMemo(() => {
     const groups = new Map<string, { label: string; exps: Expense[]; sortKey: number }>();
     for (const exp of expenses) {
@@ -240,6 +248,18 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
       .sort((a, b) => b.sortKey - a.sortKey)
       .map((g) => ({ label: g.label, expenses: g.exps }));
   }, [expenses]);
+
+  // Slice groups to visibleCount total expenses (newest first).
+  const { visibleGroups, hasMore } = useMemo(() => {
+    let remaining = visibleCount;
+    const result: Array<{ label: string; expenses: Expense[] }> = [];
+    for (const group of expenseGroups) {
+      if (remaining <= 0) break;
+      result.push({ label: group.label, expenses: group.expenses.slice(0, remaining) });
+      remaining -= group.expenses.length;
+    }
+    return { visibleGroups: result, hasMore: visibleCount < expenses.length };
+  }, [expenseGroups, visibleCount, expenses.length]);
 
   // Settlements sorted newest first
   const sortedSettlements = useMemo(
@@ -269,10 +289,14 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
   if (expenses.length === 0 && settlements.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-          <Receipt className="h-5 w-5 text-gray-400" />
+        <div className="h-14 w-14 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <Receipt className="h-6 w-6 text-gray-400" />
         </div>
-        <p className="text-gray-500 text-sm">No activity yet. Add the first expense!</p>
+        <h3 className="text-base font-semibold text-gray-900 mb-1">No expenses yet</h3>
+        <p className="text-gray-500 text-sm mb-5 max-w-xs">
+          Add your first shared expense — rent, groceries, utilities — and SplitMate will split it for you.
+        </p>
+        <AddExpenseDialog roomId={roomId} members={members} currentUserId={currentUserId} />
       </div>
     );
   }
@@ -298,7 +322,7 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
       )}
 
       {/* ── EXPENSE GROUPS BY DATE ── */}
-      {expenseGroups.map(({ label, expenses: dayExps }) => (
+      {visibleGroups.map(({ label, expenses: dayExps }) => (
         <div key={label}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">{label}</p>
           <div className="space-y-3">
@@ -345,14 +369,23 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
                       <div className="flex items-start gap-1 shrink-0">
                         <p className="font-bold text-gray-900 text-lg leading-none">{formatCurrency(exp.amount)}</p>
                         {canDelete && (
-                          <Button
-                            variant="ghost" size="sm"
-                            className="h-7 w-7 p-0 text-gray-400 hover:text-rose-500 -mt-0.5 ml-1"
-                            onClick={() => handleDelete(exp.id)}
-                            disabled={deleting === exp.id}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 w-7 p-0 text-gray-400 hover:text-indigo-500 -mt-0.5 ml-1"
+                              onClick={() => setEditingExpense(exp)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 w-7 p-0 text-gray-400 hover:text-rose-500 -mt-0.5"
+                              onClick={() => handleDelete(exp.id)}
+                              disabled={deleting === exp.id}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -476,6 +509,21 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
         </div>
       ))}
 
+      {/* ── LOAD MORE ── */}
+      {hasMore && (
+        <div className="flex items-center justify-center pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+            className="gap-2 text-gray-600"
+          >
+            <ChevronDown className="h-4 w-4" />
+            Load {Math.min(PAGE_SIZE, expenses.length - visibleCount)} older expenses
+          </Button>
+        </div>
+      )}
+
       {/* ── GLOBAL SETTLEMENTS SECTION (always at bottom, collapsed by default) ── */}
       {sortedSettlements.length > 0 && (
         <div>
@@ -539,6 +587,19 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
       {/* Edge: settlements exist but no expenses */}
       {expenses.length === 0 && settlements.length > 0 && (
         <p className="text-sm text-gray-400 text-center py-4">No expenses yet. {settlements.length} settlement(s) recorded below.</p>
+      )}
+
+      {editingExpense && (
+        <EditExpenseDialog
+          roomId={roomId}
+          members={members}
+          expense={{
+            ...editingExpense,
+            participantIds: editingExpense.participants.map((p) => p.userId),
+          }}
+          open={editingExpense !== null}
+          onOpenChange={(open) => { if (!open) setEditingExpense(null); }}
+        />
       )}
     </div>
   );

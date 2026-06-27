@@ -67,7 +67,7 @@ export async function joinRoomByCode(userId: string, inviteCode: string) {
     entityId: room.id,
     metadata: { userId },
   });
-  return member;
+  return { member, roomId: room.id };
 }
 
 export async function leaveRoom(roomId: string, userId: string) {
@@ -85,6 +85,63 @@ export async function leaveRoom(roomId: string, userId: string) {
     entityType: "room",
     entityId: roomId,
     metadata: { userId },
+  });
+}
+
+export async function renameRoom(roomId: string, userId: string, name: string) {
+  const room = await roomRepo.findRoomById(roomId);
+  if (!room) throw new NotFoundError("Room");
+
+  const membership = await roomRepo.findRoomMember(roomId, userId);
+  if (!membership || membership.role !== "admin") throw new ForbiddenError("Only admins can rename a room");
+
+  const updated = await roomRepo.updateRoom(roomId, { name });
+  await logActivity({
+    roomId,
+    actorId: userId,
+    action: "ROOM_RENAMED",
+    entityType: "room",
+    entityId: roomId,
+    metadata: { oldName: room.name, newName: name },
+  });
+  return updated;
+}
+
+export async function regenerateInviteCode(roomId: string, userId: string) {
+  const room = await roomRepo.findRoomById(roomId);
+  if (!room) throw new NotFoundError("Room");
+
+  const membership = await roomRepo.findRoomMember(roomId, userId);
+  if (!membership || membership.role !== "admin") throw new ForbiddenError("Only admins can regenerate the invite code");
+
+  const inviteCode = generateInviteCode();
+  const updated = await roomRepo.updateRoom(roomId, { inviteCode });
+  await logActivity({
+    roomId,
+    actorId: userId,
+    action: "INVITE_CODE_REGENERATED",
+    entityType: "room",
+    entityId: roomId,
+    metadata: {},
+  });
+  return updated;
+}
+
+export async function deleteRoom(roomId: string, userId: string) {
+  const room = await roomRepo.findRoomById(roomId);
+  if (!room) throw new NotFoundError("Room");
+
+  const membership = await roomRepo.findRoomMember(roomId, userId);
+  if (!membership || membership.role !== "admin") throw new ForbiddenError("Only admins can delete a room");
+
+  await roomRepo.softDeleteRoom(roomId);
+  await logActivity({
+    roomId,
+    actorId: userId,
+    action: "ROOM_DELETED",
+    entityType: "room",
+    entityId: roomId,
+    metadata: { name: room.name },
   });
 }
 

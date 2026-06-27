@@ -43,6 +43,22 @@ export async function findParticipantsByExpenseIds(expenseIds: string[]) {
     .where(inArray(expenseParticipants.expenseId, expenseIds));
 }
 
+export async function updateExpense(
+  id: string,
+  data: Pick<NewExpense, "title" | "amount" | "category" | "splitType" | "paidBy" | "notes" | "expenseDate">
+) {
+  const result = await db
+    .update(expenses)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(expenses.id, id))
+    .returning();
+  return result[0] ?? null;
+}
+
+export async function deleteParticipantsByExpenseId(expenseId: string) {
+  return db.delete(expenseParticipants).where(eq(expenseParticipants.expenseId, expenseId));
+}
+
 export async function softDeleteExpense(id: string) {
   const result = await db
     .update(expenses)

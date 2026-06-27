@@ -14,3 +14,6 @@ export const addExpenseSchema = z.object({
 });
 
 export type AddExpenseInput = z.infer<typeof addExpenseSchema>;
+
+export const updateExpenseSchema = addExpenseSchema;
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;

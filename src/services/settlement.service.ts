@@ -1,9 +1,11 @@
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import * as settlementRepo from "@/repositories/settlement.repository";
 import * as roomRepo from "@/repositories/room.repository";
+import * as userRepo from "@/repositories/user.repository";
 import * as proposalRepo from "@/repositories/proposal.repository";
 import { logActivity } from "@/repositories/activity-log.repository";
 import { detectAndCreateCredit, consumeCreditsOnSettlement, confirmProposalsForSettlement } from "@/services/credit.service";
+import { sendSettlementEmail } from "@/lib/email";
 
 export interface RecordSettlementInput {
   payerId: string;
@@ -37,10 +39,9 @@ export async function recordSettlement(userId: string, roomId: string, data: Rec
     metadata: { payerId: data.payerId, payeeId: data.payeeId, amount: data.amount },
   });
 
-  // The credit hooks below are best-effort: the neon-http driver doesn't
-  // support transactions, so a hook failure must not fail (or roll back) the
-  // already-recorded settlement. Balances stay correct either way — they are
-  // derived from raw expenses + settlements, credits are auxiliary.
+  // All post-settlement hooks are best-effort: a failure must not roll back
+  // the already-recorded settlement. Balances derive from raw ledger data and
+  // stay correct regardless of hook outcomes.
   const runHook = async (name: string, hook: () => Promise<unknown>) => {
     try {
       await hook();
@@ -63,6 +64,25 @@ export async function recordSettlement(userId: string, roomId: string, data: Rec
   await runHook("confirmProposalsForSettlement", () =>
     confirmProposalsForSettlement(roomId, data.payerId, data.payeeId, data.amount, settlement.id)
   );
+
+  // Notify payee by email
+  await runHook("sendSettlementEmail", async () => {
+    const [payer, payee] = await Promise.all([
+      userRepo.findUserById(data.payerId),
+      userRepo.findUserById(data.payeeId),
+    ]);
+    if (payee?.email) {
+      await sendSettlementEmail({
+        roomId,
+        roomName: room.name,
+        payerName: payer?.name ?? "Someone",
+        amount: data.amount,
+        payeeEmail: payee.email,
+        payeeName: payee.name,
+        note: data.note,
+      });
+    }
+  });
 
   return settlement;
 }

@@ -48,13 +48,14 @@ interface BalanceViewProps {
   pairwise: PairwiseBalance[];
   members: Member[];
   currentUserId: string;
+  expenseCount: number;
 }
 
 function initials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
-export function BalanceView({ roomId, balances, pairwise, members, currentUserId }: BalanceViewProps) {
+export function BalanceView({ roomId, balances, pairwise, members, currentUserId, expenseCount }: BalanceViewProps) {
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }));
   const memberEmailMap = new Map(members.map((m) => [m.id, m.email]));
 
@@ -427,13 +428,21 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
         </div>
       )}
 
-      {/* All settled state */}
+      {/* Empty / settled state */}
       {myNet === 0 && myDebts.length === 0 && myCredits.length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-4xl mb-3">🎉</p>
-          <p className="font-semibold text-gray-700">Everyone is settled up!</p>
-          <p className="text-sm text-gray-400 mt-1">No pending payments in this room</p>
-        </div>
+        expenseCount === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-4xl mb-3">📊</p>
+            <p className="font-semibold text-gray-700">No balances yet</p>
+            <p className="text-sm text-gray-400 mt-1">Add your first expense in the Activity tab to see balances here.</p>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-4xl mb-3">🎉</p>
+            <p className="font-semibold text-gray-700">Everyone is settled up!</p>
+            <p className="text-sm text-gray-400 mt-1">No pending payments in this room.</p>
+          </div>
+        )
       )}
     </div>
   );

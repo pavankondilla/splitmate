@@ -250,6 +250,18 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 11 | Production Deployment (Vercel + Clerk + splitmate.co.in) | **Complete** |
 | 12 | Bug fixes + Mobile responsiveness | **Complete** |
 | 13 | UI/UX Refinements (Activity feed, Member history, Balances) | **Complete** |
+| 23 | Edit Expense | **Complete** |
+| 24 | Error & Not-Found Pages | **Complete** |
+| 25 | Delete Room | **Complete** |
+| 26 | Room Settings (Rename + Regenerate Invite Code) | **Complete** |
+| 27 | Expense Pagination (Load More) | **Complete** |
+| 28 | Email Notifications (Resend) | **Complete** |
+| 29 | Data Export (CSV) | **Complete** |
+| 30 | Profile Settings Page | **Complete** |
+| 31 | Shareable Invite Link (/join?code=) | **Complete** |
+| 32 | Loading Skeletons | **Complete** |
+| 33 | Onboarding / Empty-State CTAs | **Complete** |
+| 34 | Rate Limiting (Upstash) | **Complete** |
 
 ---
 
@@ -464,4 +476,40 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 
 ---
 
-*Last updated: Phase 21 — Complete. Activity statuses ordered by record time. App stable at splitmate.co.in.*
+---
+
+## Phase 23: Edit Expense
+
+**Feature:** Pencil icon on expense cards (creator-only) opens a pre-populated edit dialog. Full replacement — title, amount, category, paidBy, date, notes, and split participants can all be changed.
+
+**Guard:** If any participant on the expense has `creditApplied > 0`, the edit is blocked with a clear error (delete and re-add instead). This prevents orphaned credits.
+
+**Changes:**
+| Layer | Change |
+|---|---|
+| `expense.repository.ts` | Added `updateExpense()` and `deleteParticipantsByExpenseId()` |
+| `expense.schema.ts` | Added `updateExpenseSchema` (alias of `addExpenseSchema`) |
+| `expense.service.ts` | Added `updateExpense()` — auth check, credit guard, share recalc, activity log (`EXPENSE_EDITED`) |
+| `app/api/rooms/[id]/expenses/[eid]/route.ts` | Added `PATCH` handler |
+| `components/rooms/edit-expense-dialog.tsx` | New controlled dialog, pre-populated via `useEffect` on `open` change |
+| `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
+| `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
+
+*Last updated: Phase 34 — Complete. Rate limiting via Upstash added to middleware.*
+
+---
+
+## Phase 24: Error & Not-Found Pages
+
+**Problem:** Users hitting bad URLs, deleted rooms, or server errors got a blank Next.js crash screen with no navigation.
+
+**Files added:**
+
+| File | Purpose |
+|---|---|
+| `src/app/not-found.tsx` | Global 404 — shown for any unknown URL outside the app shell. Standalone branded page with links to Dashboard and Home. |
+| `src/app/(app)/not-found.tsx` | App-scoped 404 — shown (with header) when `notFound()` is called inside the `(app)` group (e.g. deleted/forbidden rooms). |
+| `src/app/(app)/error.tsx` | Error boundary inside the app shell — catches unhandled server/client errors, shows Error ID digest, Try Again + Back to Dashboard. |
+| `src/app/error.tsx` | Global error boundary — catches catastrophic errors outside all layouts. Renders its own `<html>` as required by Next.js. |
+
+**Room page** already called `notFound()` for `NotFoundError` and `ForbiddenError` — now lands on a proper page instead of a crash.

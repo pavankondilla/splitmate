@@ -93,7 +93,11 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-gray-100 py-6 text-center text-sm text-gray-400">
-        © 2026 SplitMate
+        <span>© 2026 SplitMate</span>
+        <span className="mx-2">·</span>
+        <Link href="/privacy" className="hover:text-gray-600 transition-colors">Privacy</Link>
+        <span className="mx-2">·</span>
+        <Link href="/terms" className="hover:text-gray-600 transition-colors">Terms</Link>
       </footer>
     </div>
   );
