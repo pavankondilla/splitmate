@@ -262,6 +262,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 32 | Loading Skeletons | **Complete** |
 | 33 | Onboarding / Empty-State CTAs | **Complete** |
 | 34 | Rate Limiting (Upstash) | **Complete** |
+| 35 | Stale Credit Display Fix + Tab Reorder | **Complete** |
 
 ---
 
@@ -290,11 +291,11 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 ## Room Detail Tab Order (UI Convention)
 
 **Default tab order for room detail pages:**
-1. **Balances** (default/first) — Financial status, who owes whom
-2. **Members** (second) — Member list with personal transaction history
-3. **Activity** (third) — Detailed transaction log (reference only)
+1. **Activity** (default/first) — Full transaction log, expense cards with credit status
+2. **Balances** (second) — Financial status, who owes whom
+3. **Members** (third) — Member list with personal transaction history
 
-**Rationale:** Users open a room wanting to know financial status first, then dive into details.
+**Rationale:** Users open a room to see what happened (Activity), then check balances. Activity is the most-used tab day-to-day.
 
 ---
 
@@ -330,7 +331,7 @@ room rent  RENT  ₹9,000  Pavan  12 Jun
 | Clerk webhook for user sync | Clerk is source of truth for identity |
 | `split_type` from day 1 | Avoid painful future migration |
 | Invite code expiry field | Ready for security hardening |
-| Balances tab first | Users need financial status immediately |
+| Activity tab first | Users open a room to see what happened day-to-day, not just balances |
 | Activity = Bank statement style | Reduce cognitive load, improve scannability |
 | Unified feed with clear sections | Balance clarity vs detail without chaos |
 
@@ -383,7 +384,7 @@ CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
 - **Fixed Pairwise Logic:** Now correctly derives from net balances (greedy algorithm)
 - **Consistent Balance Calculation:** Members tab and Balances tab now show same values
 - **Activity Tab Redesign:** Parent-child card structure — each expense is a parent card with expandable split details showing each participant's status (Settled / Pending / Auto-credit). Settlements appear as standalone green cards. Date grouping (Today / Yesterday / date). Running-balance algorithm derives per-participant status across the full expense+settlement timeline.
-- **Tab Order Fixed:** Balances (default) → Members → Activity
+- **Tab Order Fixed:** Activity (default) → Balances → Members (updated again in Phase 35)
 - **Balances Tab Redesign (Option 3):** Person-centric view — each member's card shows "You owe X ₹Y" and "Z owes you ₹Y" clearly. Removed abstract pairwise section. Intuitive and non-confusing.
 
 ---
@@ -495,7 +496,7 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 34 — Complete. Rate limiting via Upstash added to middleware.*
+*Last updated: Phase 35 — Complete. Stale credit display fix + tab reorder.*
 
 ---
 
@@ -513,3 +514,27 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `src/app/error.tsx` | Global error boundary — catches catastrophic errors outside all layouts. Renders its own `<html>` as required by Next.js. |
 
 **Room page** already called `notFound()` for `NotFoundError` and `ForbiddenError` — now lands on a proper page instead of a crash.
+
+---
+
+## Phase 35: Stale Credit Display Fix + Tab Reorder
+
+**Bug:** After all debts were settled, a leftover partial credit (e.g. ₹100) kept appearing in the Activity and Balance tabs even though the room was fully settled.
+
+**Root causes:**
+
+| Cause | Location | Description |
+|---|---|---|
+| Orphaned partial credit | `consumeCreditsOnSettlement` | If credit was partially applied (e.g. ₹900 of ₹1,000 used), the remaining ₹100 was never exhausted because `computeCreditReturnPortion` returned 0 for exact-debt settlements — nothing triggered `isExhausted=true` |
+| SETTLED status ≠ isExhausted | `confirmProposalsForSettlement` | `updateCreditStatus("SETTLED")` and `updateCreditUsed` were separate calls; proposal path only called the former, leaving `isExhausted=false` on settled credits |
+| No server-side filter | `findCreditsByRoom` | Returned ALL credits regardless of state; filtering was left entirely to the UI |
+
+**Fixes:**
+
+| Layer | File | Change |
+|---|---|---|
+| Force-exhaust on full payment | `credit.service.ts` → `consumeCreditsOnSettlement` | After the main loop, if `totalPaid >= totalEffectiveOwed` (payer fully covered their expense debt), all remaining active credits for the pair are exhausted — they can never be applied again |
+| Exhaust on proposal confirm | `credit.service.ts` → `confirmProposalsForSettlement` | Now reads credit record and calls `updateCreditUsed(totalCredit, true)` before `updateCreditStatus("SETTLED")` so both flags are always in sync |
+| DB-level filter | `credit.repository.ts` → `findCreditsByRoom` | Added `isExhausted = false` AND `status != 'SETTLED'` filters — dead credits never reach the UI |
+
+**Tab reorder:** Activity is now the default first tab (was Balances). Order: Activity → Balances → Members. Change in `room-tabs.tsx` (`defaultValue` + trigger order).
