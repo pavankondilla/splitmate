@@ -265,6 +265,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 35 | Stale Credit Display Fix + Tab Reorder | **Complete** |
 | 36 | Balance Calculation Fix (findAllCreditsByRoom) | **Complete** |
 | 37 | Credit Force-Exhaust Bug Fix (Apply Credit button missing) | **Complete** |
+| 38 | Partial Credit Preserved After Proposal Confirm + Credit Visible to Payer | **Complete** |
 
 ---
 
@@ -498,7 +499,7 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 37 — Complete. Credit force-exhaust bug fix (Apply Credit button missing).*
+*Last updated: Phase 38 — Complete. Partial credit preserved after proposal confirm + credit visible to payer.*
 
 ---
 
@@ -617,3 +618,31 @@ if (totalEffectiveOwed > 0 && totalPaid >= totalEffectiveOwed) {
 **Phase 35 behavior preserved:** Partially-consumed credits (`usedCredit > 0`) are still exhausted when the payer has fully paid their expense debt — the original stale-credit scenario still works correctly.
 
 **File changed:** `src/services/credit.service.ts` only. No schema migration needed.
+
+---
+
+## Phase 38: Partial Credit Preserved After Proposal Confirm + Credit Visible to Payer
+
+**Bugs (3-member scenario: A pays rent, B overpays ₹500 credit, C pays wifi, B applies ₹400 credit):**
+
+1. A (expense payer) could not see B's available credit in the Activity tab before B applied it anywhere.
+2. After B applied ₹400 of ₹500 credit (proposal path, A→C ₹400) and A confirmed the proposal, B's remaining ₹100 credit was silently wiped — the Apply Credit button disappeared on A's grocery expense.
+3. Pairwise balances showed wrong amounts after proposal confirmation because the credit adjustment was gated on `status === "SETTLED"`, which was no longer true for partial credits.
+
+**Root causes:**
+
+| Bug | Location | Cause |
+|---|---|---|
+| Credit invisible to payer | `expense-list.tsx` `creditHolders` filter | `p.creditApplied > 0` guard prevented unapplied credits from appearing |
+| Remaining credit wiped on proposal confirm | `credit.service.ts` `confirmProposalsForSettlement` | `updateCreditUsed(id, credit.totalCredit, true)` force-set `usedCredit` to full amount regardless of how much was actually used |
+| Wrong pairwise balance after partial confirm | `balance.service.ts` `getPairwiseBalances` | Credit adjustment loop skipped `status !== "SETTLED"` credits; partial credits restored to `ACTIVE` (Fix 2) were excluded |
+
+**Fixes:**
+
+| File | Change |
+|---|---|
+| `expense-list.tsx` | Removed `&& p.creditApplied > 0` from `creditHolders` filter — the `remaining <= 0` inner guard already prevents zero-balance lines |
+| `credit.service.ts` | `confirmProposalsForSettlement` now keeps `usedCredit = credit.usedCredit` (set correctly by `applyCredit`); only marks `isExhausted=true` and `status=SETTLED` if `usedCredit >= totalCredit`, otherwise restores `status=ACTIVE` |
+| `balance.service.ts` | Removed `if (credit.status !== "SETTLED") continue` from credit adjustment loop in `getPairwiseBalances`; relies on `autoUsed > 0` (derived from `creditConfirmed` participants) — naturally 0 for pending/unapplied credits, non-zero only for confirmed ones |
+
+**`lib/balance.ts` (`computeNetBalance`) unchanged** — its `proposalCovered` subtraction already cancels the credit adjustment for the proposal-path portion, giving the correct net regardless of credit status.
