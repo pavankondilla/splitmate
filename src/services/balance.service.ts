@@ -118,7 +118,6 @@ export async function getPairwiseBalances(roomId: string, userId: string): Promi
   }
   const allCredits = await creditRepo.findAllCreditsByRoom(roomId);
   for (const credit of allCredits) {
-    if (credit.status !== "SETTLED") continue;
     const autoUsed = Math.min(credit.usedCredit, expenseCreditUsed.get(credit.userId) ?? 0);
     if (autoUsed > 0) {
       setDebt(credit.owedByUserId, credit.userId,

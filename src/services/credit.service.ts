@@ -21,9 +21,10 @@ export async function confirmProposalsForSettlement(
     if (proposal.sourceCreditId) {
       const credit = await creditRepo.findCreditById(proposal.sourceCreditId);
       if (credit) {
-        await creditRepo.updateCreditUsed(proposal.sourceCreditId, credit.totalCredit, true);
+        const isNowExhausted = credit.usedCredit >= credit.totalCredit;
+        await creditRepo.updateCreditUsed(proposal.sourceCreditId, credit.usedCredit, isNowExhausted);
+        await creditRepo.updateCreditStatus(proposal.sourceCreditId, isNowExhausted ? "SETTLED" : "ACTIVE");
       }
-      await creditRepo.updateCreditStatus(proposal.sourceCreditId, "SETTLED");
     }
     if (proposal.participantId) {
       // A share can be covered by multiple credits, each with its own proposal.
