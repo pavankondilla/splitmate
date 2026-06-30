@@ -266,6 +266,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 36 | Balance Calculation Fix (findAllCreditsByRoom) | **Complete** |
 | 37 | Credit Force-Exhaust Bug Fix (Apply Credit button missing) | **Complete** |
 | 38 | Partial Credit Preserved After Proposal Confirm + Credit Visible to Payer | **Complete** |
+| 39 | Spurious Credit Created When Payer Confirms a Proposal Settlement | **Complete** |
 
 ---
 
@@ -499,7 +500,7 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 38 — Complete. Partial credit preserved after proposal confirm + credit visible to payer.*
+*Last updated: Phase 39 — Complete. Spurious credit no longer created when payer confirms a proposal settlement.*
 
 ---
 
@@ -646,3 +647,19 @@ if (totalEffectiveOwed > 0 && totalPaid >= totalEffectiveOwed) {
 | `balance.service.ts` | Removed `if (credit.status !== "SETTLED") continue` from credit adjustment loop in `getPairwiseBalances`; relies on `autoUsed > 0` (derived from `creditConfirmed` participants) — naturally 0 for pending/unapplied credits, non-zero only for confirmed ones |
 
 **`lib/balance.ts` (`computeNetBalance`) unchanged** — its `proposalCovered` subtraction already cancels the credit adjustment for the proposal-path portion, giving the correct net regardless of credit status.
+
+---
+
+## Phase 39: Spurious Credit Created When Payer Confirms a Proposal Settlement
+
+**Bug:** After A settled B's credit proposal (A paid C to confirm the proposal), A's Activity and Balances tabs showed "₹400 credit available" even though all balances were ₹0 and everything was settled.
+
+**Root cause:** In `recordSettlement`, `detectAndCreateCredit` runs BEFORE `confirmProposalsForSettlement`. When A paid C ₹400 to confirm B's proposal, `detectAndCreateCredit` saw A paying C with no expense debt to C, treated the full ₹400 as overpayment, and created a spurious credit: `userId=A, owedByUserId=C, totalCredit=400`. Pending proposals (which explain the payment as forwarding B's credit debt) were never checked.
+
+**Fixes:**
+
+| File | Change |
+|---|---|
+| `credit.service.ts` | `detectAndCreateCredit` now queries pending proposals for (payerId→payeeId) pair and subtracts their total from the overpayment before creating a credit. `proposalAdjustedOverpayment ≤ 0` → no credit created. Prevents future spurious credits. |
+| `expense-list.tsx` | Credit banner now requires `hasApplicableShare` — the user must have at least one pending expense share (`status=PENDING`, `creditApplied=0`) to see the "credit available" notification. A stale credit in a fully-settled room has no applicable shares → banner suppressed. |
+| `balance-view.tsx` | Credit badge in Balances tab now requires `myNet !== 0`. A real credit always produces positive net balance; `myNet=0` with credit showing is always a spurious artifact. |
