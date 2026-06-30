@@ -253,7 +253,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
               <span>{myCredits.length} awaiting payment</span>
             </div>
           )}
-          {availableCredit > 0 && (
+          {availableCredit > 0 && myNet !== 0 && (
             <div className="flex items-center gap-1.5 text-blue-500 font-medium">
               <Sparkles className="h-3.5 w-3.5" />
               <span>{formatCurrency(availableCredit)} credit available</span>

@@ -75,11 +75,19 @@ export async function detectAndCreateCredit(
   const adjustedOverpayment = overpayment - totalCreditDebt;
   if (adjustedOverpayment <= 0) return null;
 
+  // If payer has pending proposals to pay payee (on behalf of someone else's credit),
+  // those amounts are not genuine overpayments — the payer is forwarding a credit debt,
+  // not building their own new credit. Subtract before creating a credit record.
+  const pendingProposals = await proposalRepo.findPendingProposalsByPair(roomId, payerId, payeeId);
+  const pendingProposalTotal = pendingProposals.reduce((sum, p) => sum + p.amount, 0);
+  const proposalAdjustedOverpayment = adjustedOverpayment - pendingProposalTotal;
+  if (proposalAdjustedOverpayment <= 0) return null;
+
   // Only create credit for the DELTA above existing credit records for this pair.
   // Prevents duplicate records when multiple settlements occur over time.
   const existingCredits = await creditRepo.findCreditsByUserRoomAndOwedBy(payerId, roomId, payeeId);
   const existingTotal = existingCredits.reduce((sum, c) => sum + c.totalCredit, 0);
-  const delta = adjustedOverpayment - existingTotal;
+  const delta = proposalAdjustedOverpayment - existingTotal;
   if (delta <= 0) return null;
 
   const credit = await creditRepo.createCredit({

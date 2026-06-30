@@ -189,6 +189,21 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
     [credits, currentUserId]
   );
 
+  // Only show the credit banner when the user actually has pending expense shares
+  // to apply credit to. A stale/spurious credit with no applicable shares would
+  // produce a misleading banner even though nothing can be applied.
+  const hasApplicableShare = useMemo(() => {
+    for (const exp of expenses) {
+      for (const p of exp.participants) {
+        if (p.userId !== currentUserId || p.userId === exp.paidBy) continue;
+        if (p.creditApplied > 0) continue;
+        const status = statusMap.get(exp.id)?.get(p.userId);
+        if (status?.kind === "PENDING") return true;
+      }
+    }
+    return false;
+  }, [expenses, statusMap, currentUserId]);
+
   // Remaining credit per (holder, owedBy) pair — also straight from the DB.
   const creditRemainingByPair = useMemo(() => {
     const map = new Map<string, number>();
@@ -305,7 +320,7 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
     <div className="space-y-6">
 
       {/* ── CREDIT NOTIFICATION CARD ── */}
-      {availableCredit > 0 && (
+      {availableCredit > 0 && hasApplicableShare && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-3">
           <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
             <Wallet className="h-4 w-4 text-blue-600" />
