@@ -83,7 +83,9 @@ export function AddExpenseDialog({ roomId, members, currentUserId }: AddExpenseD
   return (
     <>
       <Button onClick={() => setOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
-        <Plus className="h-4 w-4" /> Add Expense
+        <Plus className="h-4 w-4" />
+        <span className="sm:hidden">Add</span>
+        <span className="hidden sm:inline">Add Expense</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-[95vw] sm:max-w-md">

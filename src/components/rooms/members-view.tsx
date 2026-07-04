@@ -105,14 +105,14 @@ export function MembersView({ roomId, members, expenses, settlements, balances, 
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900 text-sm">{m.name}</span>
-                  {isYou && <span className="text-xs text-gray-400">(you)</span>}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium text-gray-900 text-sm truncate">{m.name}</span>
+                  {isYou && <span className="text-xs text-gray-400 shrink-0">(you)</span>}
                 </div>
                 <p className="text-xs text-gray-500 truncate">{m.email}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Badge variant={m.role === "admin" ? "default" : "secondary"} className={m.role === "admin" ? "bg-indigo-600 text-white" : ""}>
+                <Badge variant={m.role === "admin" ? "default" : "secondary"} className={`hidden sm:inline-flex ${m.role === "admin" ? "bg-indigo-600 text-white" : ""}`}>
                   {m.role}
                 </Badge>
                 <span className={`text-sm font-semibold ${balance > 0 ? "text-emerald-600" : balance < 0 ? "text-rose-600" : "text-gray-400"}`}>

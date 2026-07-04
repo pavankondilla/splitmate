@@ -436,16 +436,16 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
                           availableCredit > 0;
 
                         return (
-                          <div key={p.userId} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
+                          <div key={p.userId} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                            <div className="flex items-center gap-2.5 min-w-0">
                               <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0">
                                 {name[0]?.toUpperCase()}
                               </div>
-                              <span className={`text-sm ${isMe ? "font-semibold text-gray-900" : "text-gray-700"}`}>
+                              <span className={`text-sm truncate ${isMe ? "font-semibold text-gray-900" : "text-gray-700"}`}>
                                 {isMe ? "You" : name}
                               </span>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 ml-auto">
                               <span className="text-sm font-medium text-gray-900">{formatCurrency(p.shareAmount)}</span>
                               {isPayer ? (
                                 <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Paid</span>

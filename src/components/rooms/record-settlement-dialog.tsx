@@ -65,7 +65,13 @@ export function RecordSettlementDialog({ roomId, members, currentUserId, prefill
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)} className={triggerClassName ?? "gap-2"}>
-        <CheckCircle className="h-4 w-4" /> {triggerLabel ?? "Record Settlement"}
+        <CheckCircle className="h-4 w-4" />
+        {triggerLabel ?? (
+          <>
+            <span className="sm:hidden">Settle</span>
+            <span className="hidden sm:inline">Record Settlement</span>
+          </>
+        )}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">

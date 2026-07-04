@@ -267,6 +267,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 37 | Credit Force-Exhaust Bug Fix (Apply Credit button missing) | **Complete** |
 | 38 | Partial Credit Preserved After Proposal Confirm + Credit Visible to Payer | **Complete** |
 | 39 | Spurious Credit Created When Payer Confirms a Proposal Settlement | **Complete** |
+| 40 | Tab Reorder (Balances first) + Mobile Responsiveness Pass | **Complete** |
 
 ---
 
@@ -295,11 +296,11 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 ## Room Detail Tab Order (UI Convention)
 
 **Default tab order for room detail pages:**
-1. **Activity** (default/first) — Full transaction log, expense cards with credit status
-2. **Balances** (second) — Financial status, who owes whom
+1. **Balances** (default/first) — Financial status, who owes whom
+2. **Activity** (second) — Full transaction log, expense cards with credit status
 3. **Members** (third) — Member list with personal transaction history
 
-**Rationale:** Users open a room to see what happened (Activity), then check balances. Activity is the most-used tab day-to-day.
+**Rationale:** Reordered in Phase 40 (user decision, reversing Phase 35): Balances is the first thing users want to check when opening a room.
 
 ---
 
@@ -335,7 +336,7 @@ room rent  RENT  ₹9,000  Pavan  12 Jun
 | Clerk webhook for user sync | Clerk is source of truth for identity |
 | `split_type` from day 1 | Avoid painful future migration |
 | Invite code expiry field | Ready for security hardening |
-| Activity tab first | Users open a room to see what happened day-to-day, not just balances |
+| Balances tab first (Phase 40) | User decision: balances are the first thing to check when opening a room (reverses Phase 35 order) |
 | Activity = Bank statement style | Reduce cognitive load, improve scannability |
 | Unified feed with clear sections | Balance clarity vs detail without chaos |
 
@@ -500,7 +501,7 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 39 — Complete. Spurious credit no longer created when payer confirms a proposal settlement.*
+*Last updated: Phase 40 — Complete. Balances tab first + mobile responsiveness pass.*
 
 ---
 
@@ -663,3 +664,22 @@ if (totalEffectiveOwed > 0 && totalPaid >= totalEffectiveOwed) {
 | `credit.service.ts` | `detectAndCreateCredit` now queries pending proposals for (payerId→payeeId) pair and subtracts their total from the overpayment before creating a credit. `proposalAdjustedOverpayment ≤ 0` → no credit created. Prevents future spurious credits. |
 | `expense-list.tsx` | Credit banner now requires `hasApplicableShare` — the user must have at least one pending expense share (`status=PENDING`, `creditApplied=0`) to see the "credit available" notification. A stale credit in a fully-settled room has no applicable shares → banner suppressed. |
 | `balance-view.tsx` | Credit badge in Balances tab now requires `myNet !== 0`. A real credit always produces positive net balance; `myNet=0` with credit showing is always a spurious artifact. |
+
+---
+
+## Phase 40: Tab Reorder (Balances First) + Mobile Responsiveness Pass
+
+**Tab reorder (user decision, reverses Phase 35):** Balances is now the default first tab. Order: Balances → Activity → Members (`room-tabs.tsx` `defaultValue` + trigger order).
+
+**Mobile fixes (UI-only, no backend changes):**
+
+| File | Change |
+|---|---|
+| `room-tabs.tsx` | Header row stacks on mobile (`flex-col` → `sm:flex-row`); TabsList full-width with equal-width triggers on mobile; action button row wraps (`flex-wrap`) |
+| `ui/dialog.tsx` | `DialogContent` gets global `max-h-[calc(100dvh-2rem)] overflow-y-auto` so long forms scroll instead of clipping on short screens |
+| `add-expense-dialog.tsx` | Trigger label shortens to "Add" on mobile (`sm:hidden` / `hidden sm:inline` spans) |
+| `record-settlement-dialog.tsx` | Default trigger label shortens to "Settle" on mobile (custom `triggerLabel` unaffected) |
+| `expense-list.tsx` | Participant rows in expanded split details wrap (`flex-wrap`) so "Pending + Apply credit + amount" doesn't overflow; participant names truncate |
+| `balance-view.tsx` | Profile card: name column gets `min-w-0` + `truncate`; balance figure is `text-2xl sm:text-3xl` |
+| `members-view.tsx` | Role badge hidden on mobile (`hidden sm:inline-flex`); member names truncate |
+| `rooms/[id]/page.tsx` | Room title gets `min-w-0` + `break-words` so long names wrap instead of pushing Export CSV off-screen |

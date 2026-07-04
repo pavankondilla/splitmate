@@ -60,8 +60,8 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
     <div className="space-y-6">
       {/* Room header */}
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{room.name}</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 break-words">{room.name}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className="text-sm text-gray-500">Invite code:</span>
             <code className="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-800 tracking-widest">

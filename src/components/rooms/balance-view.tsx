@@ -198,7 +198,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
       {/* ── CARD 1: YOUR PROFILE & BALANCE ── */}
       <div className={`rounded-2xl border p-5 ${profileBg}`}>
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Avatar className="h-12 w-12 shrink-0">
               <AvatarFallback className={`text-sm font-bold ${
                 myNet > 0 ? "bg-emerald-200 text-emerald-800"
@@ -208,9 +208,9 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                 {initials(myBalance?.userName ?? "?")}
               </AvatarFallback>
             </Avatar>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-bold text-gray-900 text-base">{myBalance?.userName ?? "You"}</p>
+                <p className="font-bold text-gray-900 text-base truncate">{myBalance?.userName ?? "You"}</p>
                 <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">You</span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -225,7 +225,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
 
           <div className="text-right shrink-0">
             <p className="text-xs text-gray-500 mb-1">Your Balance</p>
-            <p className={`text-3xl font-bold tracking-tight ${balanceColor}`}>
+            <p className={`text-2xl sm:text-3xl font-bold tracking-tight ${balanceColor}`}>
               {myNet === 0
                 ? "₹0"
                 : myNet > 0
