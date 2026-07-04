@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatCurrency } from "@/lib/format";
 import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, Sparkles, Bell, X } from "lucide-react";
-import { RecordSettlementDialog } from "./record-settlement-dialog";
+import { RecordSettlementDialog, type OptimisticSettlement } from "./record-settlement-dialog";
 
 interface Balance {
   userId: string;
@@ -49,13 +49,14 @@ interface BalanceViewProps {
   members: Member[];
   currentUserId: string;
   expenseCount: number;
+  onOptimisticSettlement?: (settlement: OptimisticSettlement) => void;
 }
 
 function initials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
-export function BalanceView({ roomId, balances, pairwise, members, currentUserId, expenseCount }: BalanceViewProps) {
+export function BalanceView({ roomId, balances, pairwise, members, currentUserId, expenseCount, onOptimisticSettlement }: BalanceViewProps) {
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }));
   const memberEmailMap = new Map(members.map((m) => [m.id, m.email]));
 
@@ -158,6 +159,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                   currentUserId={currentUserId}
                   prefillPayeeId={proposal.toUserId}
                   prefillAmount={proposal.amount}
+                  onOptimisticRecord={onOptimisticSettlement}
                   triggerLabel={`Pay ${proposal.toUserName} ${formatCurrency(proposal.amount)}`}
                   triggerClassName="w-full gap-2 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 font-semibold"
                 />
@@ -316,6 +318,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                   currentUserId={currentUserId}
                   prefillPayeeId={debt.toUserId}
                   prefillAmount={debt.amount}
+                  onOptimisticRecord={onOptimisticSettlement}
                   triggerLabel="Settle Now"
                   triggerClassName="w-full gap-2 border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 font-semibold"
                 />

@@ -1,6 +1,7 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
+import { RefreshOnFocus } from "@/components/realtime/refresh-on-focus";
 import { upsertUser } from "@/repositories/user.repository";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <RefreshOnFocus />
       <AppHeader />
       <main className="max-w-6xl mx-auto px-4 py-6 sm:py-8">{children}</main>
     </div>

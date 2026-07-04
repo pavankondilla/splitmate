@@ -268,6 +268,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 38 | Partial Credit Preserved After Proposal Confirm + Credit Visible to Payer | **Complete** |
 | 39 | Spurious Credit Created When Payer Confirms a Proposal Settlement | **Complete** |
 | 40 | Tab Reorder (Balances first) + Mobile Responsiveness Pass | **Complete** |
+| 41 | Realtime Updates (Optimistic UI + Pusher + Refresh-on-Focus) | **Complete** (needs Pusher env vars) |
 
 ---
 
@@ -284,7 +285,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 
 - Uneven splits (PERCENTAGE, EXACT, SHARES)
 - Recurring rent
-- Real-time updates (WebSockets)
+- ~~Real-time updates (WebSockets)~~ — **Done in Phase 41** (Pusher Channels)
 - UPI payment integration
 - OCR bill scanning
 - QR room joining
@@ -349,6 +350,14 @@ DATABASE_URL=            # Neon connection string
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 CLERK_WEBHOOK_SECRET=    # For validating webhook payloads
+
+# Realtime (Pusher Channels) — optional; app degrades to refresh-on-focus without them
+PUSHER_APP_ID=
+PUSHER_KEY=
+PUSHER_SECRET=
+PUSHER_CLUSTER=          # e.g. ap2 (Mumbai)
+NEXT_PUBLIC_PUSHER_KEY=  # same value as PUSHER_KEY
+NEXT_PUBLIC_PUSHER_CLUSTER=  # same value as PUSHER_CLUSTER
 ```
 
 ---
@@ -501,7 +510,7 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 40 — Complete. Balances tab first + mobile responsiveness pass.*
+*Last updated: Phase 41 — Complete. Realtime updates: optimistic UI + Pusher + refresh-on-focus.*
 
 ---
 
@@ -683,3 +692,36 @@ if (totalEffectiveOwed > 0 && totalPaid >= totalEffectiveOwed) {
 | `balance-view.tsx` | Profile card: name column gets `min-w-0` + `truncate`; balance figure is `text-2xl sm:text-3xl` |
 | `members-view.tsx` | Role badge hidden on mobile (`hidden sm:inline-flex`); member names truncate |
 | `rooms/[id]/page.tsx` | Room title gets `min-w-0` + `break-words` so long names wrap instead of pushing Export CSV off-screen |
+
+---
+
+## Phase 41: Realtime Updates (Optimistic UI + Pusher + Refresh-on-Focus)
+
+**Problem:** Every mutation used `router.refresh()` alone — a 1–2s dead gap before the UI updated, and other members never saw changes until manual reload.
+
+**Three-layer fix (no schema changes; balances stay server-computed per ledger rule):**
+
+**1. Optimistic UI (own actions feel instant):**
+| File | Change |
+|---|---|
+| `room-tabs.tsx` | Owns `useOptimistic` for expenses (add/remove) and settlements (add); passes optimistic arrays to ExpenseList/MembersView and callbacks to dialogs. Balances/pairwise are NEVER optimistically recomputed — only the raw lists. |
+| `add-expense-dialog.tsx` | After POST success, builds an `OptimisticExpense` (shares via `calculateEqualShares` — same function as server) and calls `onOptimisticAdd` inside the `startTransition` that wraps `router.refresh()`, so it displays until real data lands |
+| `record-settlement-dialog.tsx` | Same pattern with `OptimisticSettlement` (exported type); `onBehalfOfAmount: 0` default |
+| `expense-list.tsx` | Optimistic delete: card removed via `onExpenseRemoved` inside the refresh transition; empty-state AddExpenseDialog wired too |
+| `balance-view.tsx` | Passes `onOptimisticSettlement` into its Settle Now / proposal RecordSettlementDialogs |
+
+**Key pattern:** the optimistic update MUST be called inside the same `startTransition` as `router.refresh()` — React keeps the optimistic state visible exactly until the refresh delivers fresh server props, then reconciles automatically. No rollback code needed (mutation already succeeded before the optimistic insert).
+
+**2. Pusher realtime (roommates see changes in ~1s):**
+| File | Change |
+|---|---|
+| `lib/realtime.ts` | Server publisher. Lazy-inits Pusher from env; `publishRoomUpdate(roomId)` triggers `"updated"` (empty payload — clients refetch through authorized paths) on channel `room-{id}`. No-op if env missing, never throws. |
+| `activity-log.repository.ts` | Single publish point: every mutation already calls `logActivity`, which now schedules `publishRoomUpdate` via `after()` (falls back to fire-and-forget outside request scope, e.g. tests) |
+| `components/realtime/room-realtime.tsx` | Client subscriber on room page. Module-level shared Pusher connection (connection count = billed resource); 400ms debounce coalesces multi-event mutations (settlement + credit hooks) into one `router.refresh()` |
+
+**3. Refresh-on-focus (stale tabs self-heal):**
+| File | Change |
+|---|---|
+| `components/realtime/refresh-on-focus.tsx` | On window focus/visibilitychange → throttled (5s min) `router.refresh()`. Mounted once in `(app)/layout.tsx` — covers dashboard, rooms, profile. |
+
+**Deployment requirement:** create a Pusher Channels app and set the 6 env vars (see Environment Variables). Without them the app still works — realtime silently disabled, refresh-on-focus still active. Dashboard has no Pusher subscription (would need per-user multi-room channels) — it relies on refresh-on-focus.

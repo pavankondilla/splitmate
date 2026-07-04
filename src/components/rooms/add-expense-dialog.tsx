@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { calculateEqualShares } from "@/lib/split";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,18 +13,35 @@ import { Plus } from "lucide-react";
 
 interface Member { id: string; name: string }
 
+// Shape matching the room page's serialized expense — shown instantly in the
+// Activity list until router.refresh() lands the authoritative server data.
+export interface OptimisticExpense {
+  id: string;
+  title: string;
+  amount: number;
+  category: string;
+  paidBy: string;
+  expenseDate: string;
+  notes: string | null;
+  createdAt: string;
+  createdBy: string;
+  participants: Array<{ id: string; userId: string; shareAmount: number; creditApplied: number; creditConfirmed: boolean }>;
+}
+
 interface AddExpenseDialogProps {
   roomId: string;
   members: Member[];
   currentUserId: string;
+  onOptimisticAdd?: (expense: OptimisticExpense) => void;
 }
 
 const CATEGORIES = ["RENT", "GROCERIES", "UTILITIES", "WIFI", "OTHER"] as const;
 
-export function AddExpenseDialog({ roomId, members, currentUserId }: AddExpenseDialogProps) {
+export function AddExpenseDialog({ roomId, members, currentUserId, onOptimisticAdd }: AddExpenseDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     title: "",
@@ -69,10 +87,34 @@ export function AddExpenseDialog({ roomId, members, currentUserId }: AddExpenseD
         const data = await res.json();
         throw new Error(data.error ?? "Failed to add expense");
       }
+      const created = await res.json().catch(() => null);
+      const optimistic: OptimisticExpense = {
+        id: created?.id ?? `optimistic-${Date.now()}`,
+        title: form.title,
+        amount: amountPaise,
+        category: form.category,
+        paidBy: form.paidBy,
+        expenseDate: form.expenseDate,
+        notes: form.notes || null,
+        createdAt: created?.createdAt ?? new Date().toISOString(),
+        createdBy: currentUserId,
+        participants: calculateEqualShares(amountPaise, participantIds).map((s) => ({
+          id: `optimistic-${s.userId}`,
+          userId: s.userId,
+          shareAmount: s.shareAmount,
+          creditApplied: 0,
+          creditConfirmed: false,
+        })),
+      };
       setOpen(false);
       setForm({ title: "", amount: "", category: "OTHER", paidBy: currentUserId, expenseDate: new Date().toISOString().split("T")[0], notes: "" });
       setParticipantIds(members.map((m) => m.id));
-      router.refresh();
+      // The optimistic insert must share the refresh transition: it stays
+      // visible exactly until the refreshed server data replaces it.
+      startTransition(() => {
+        onOptimisticAdd?.(optimistic);
+        router.refresh();
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

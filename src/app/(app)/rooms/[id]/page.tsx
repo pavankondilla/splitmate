@@ -7,6 +7,7 @@ import { getRoomSettlements } from "@/services/settlement.service";
 import { getRoomCredits } from "@/services/credit.service";
 import { formatCurrency } from "@/lib/format";
 import { RoomTabs } from "@/components/rooms/room-tabs";
+import { RoomRealtime } from "@/components/realtime/room-realtime";
 import { Badge } from "@/components/ui/badge";
 import { ShareInviteButton } from "@/components/rooms/share-invite-button";
 import { Download } from "lucide-react";
@@ -58,6 +59,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-6">
+      <RoomRealtime roomId={room.id} />
       {/* Room header */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">

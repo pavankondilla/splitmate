@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useOptimistic, useState } from "react";
 import { Trash2, Settings } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -48,10 +48,26 @@ interface RoomTabsProps {
   currentUserRole: string;
 }
 
+type ExpenseAction = { type: "add"; expense: Expense } | { type: "remove"; id: string };
+
 export function RoomTabs({ roomId, roomName, inviteCode, members, expenses, settlements, credits, balances, pairwise, currentUserId, currentUserRole }: RoomTabsProps) {
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }));
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Optimistic view of the ledger lists: a just-added expense/settlement (or a
+  // just-deleted expense) shows instantly, then reconciles when the transition
+  // wrapping router.refresh() lands fresh server data. Balances and pairwise
+  // stay server-computed — never recomputed optimistically (ledger rule).
+  const [optimisticExpenses, applyExpenseAction] = useOptimistic(
+    expenses,
+    (state: Expense[], action: ExpenseAction) =>
+      action.type === "add" ? [action.expense, ...state] : state.filter((e) => e.id !== action.id)
+  );
+  const [optimisticSettlements, addOptimisticSettlement] = useOptimistic(
+    settlements,
+    (state: Settlement[], s: Settlement) => [s, ...state]
+  );
 
   return (
     <>
@@ -85,21 +101,21 @@ export function RoomTabs({ roomId, roomName, inviteCode, members, expenses, sett
               </Button>
             </>
           )}
-          <RecordSettlementDialog roomId={roomId} members={memberOptions} currentUserId={currentUserId} />
-          <AddExpenseDialog roomId={roomId} members={memberOptions} currentUserId={currentUserId} />
+          <RecordSettlementDialog roomId={roomId} members={memberOptions} currentUserId={currentUserId} onOptimisticRecord={addOptimisticSettlement} />
+          <AddExpenseDialog roomId={roomId} members={memberOptions} currentUserId={currentUserId} onOptimisticAdd={(expense) => applyExpenseAction({ type: "add", expense })} />
         </div>
       </div>
 
       <TabsContent value="expenses">
-        <ExpenseList roomId={roomId} expenses={expenses} settlements={settlements} credits={credits} members={memberOptions} currentUserId={currentUserId} currentUserRole={currentUserRole} />
+        <ExpenseList roomId={roomId} expenses={optimisticExpenses} settlements={optimisticSettlements} credits={credits} members={memberOptions} currentUserId={currentUserId} currentUserRole={currentUserRole} onExpenseRemoved={(id) => applyExpenseAction({ type: "remove", id })} onExpenseAdded={(expense) => applyExpenseAction({ type: "add", expense })} />
       </TabsContent>
 
       <TabsContent value="balances">
-        <BalanceView roomId={roomId} balances={balances} pairwise={pairwise} members={members} currentUserId={currentUserId} expenseCount={expenses.length} />
+        <BalanceView roomId={roomId} balances={balances} pairwise={pairwise} members={members} currentUserId={currentUserId} expenseCount={optimisticExpenses.length} onOptimisticSettlement={addOptimisticSettlement} />
       </TabsContent>
 
       <TabsContent value="members">
-        <MembersView roomId={roomId} members={members} expenses={expenses} settlements={settlements} balances={balances} currentUserId={currentUserId} currentUserRole={currentUserRole} />
+        <MembersView roomId={roomId} members={members} expenses={optimisticExpenses} settlements={optimisticSettlements} balances={balances} currentUserId={currentUserId} currentUserRole={currentUserRole} />
       </TabsContent>
     </Tabs>
 

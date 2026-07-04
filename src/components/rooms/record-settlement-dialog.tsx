@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,19 @@ import { CheckCircle } from "lucide-react";
 
 interface Member { id: string; name: string }
 
+// Shape matching the room page's serialized settlement — shown instantly in
+// the Activity list until router.refresh() lands the server data.
+export interface OptimisticSettlement {
+  id: string;
+  payerId: string;
+  payeeId: string;
+  amount: number;
+  note: string | null;
+  settledAt: string;
+  onBehalfOfAmount: number;
+  onBehalfOfUserId: string | null;
+}
+
 interface RecordSettlementDialogProps {
   roomId: string;
   members: Member[];
@@ -19,12 +32,14 @@ interface RecordSettlementDialogProps {
   prefillAmount?: number; // in paise
   triggerLabel?: string;
   triggerClassName?: string;
+  onOptimisticRecord?: (settlement: OptimisticSettlement) => void;
 }
 
-export function RecordSettlementDialog({ roomId, members, currentUserId, prefillPayeeId, prefillAmount, triggerLabel, triggerClassName }: RecordSettlementDialogProps) {
+export function RecordSettlementDialog({ roomId, members, currentUserId, prefillPayeeId, prefillAmount, triggerLabel, triggerClassName, onOptimisticRecord }: RecordSettlementDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     payerId: currentUserId,
@@ -52,9 +67,23 @@ export function RecordSettlementDialog({ roomId, members, currentUserId, prefill
         const data = await res.json();
         throw new Error(data.error ?? "Failed to record settlement");
       }
+      const created = await res.json().catch(() => null);
+      const optimistic: OptimisticSettlement = {
+        id: created?.id ?? `optimistic-${Date.now()}`,
+        payerId: form.payerId,
+        payeeId: form.payeeId,
+        amount: amountPaise,
+        note: form.note || null,
+        settledAt: created?.settledAt ?? new Date().toISOString(),
+        onBehalfOfAmount: 0,
+        onBehalfOfUserId: null,
+      };
       setOpen(false);
       setForm({ payerId: currentUserId, payeeId: "", amount: "", note: "" });
-      router.refresh();
+      startTransition(() => {
+        onOptimisticRecord?.(optimistic);
+        router.refresh();
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

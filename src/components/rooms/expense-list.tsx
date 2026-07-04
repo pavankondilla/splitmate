@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -56,6 +56,8 @@ interface ExpenseListProps {
   members: Member[];
   currentUserId: string;
   currentUserRole: string;
+  onExpenseRemoved?: (id: string) => void;
+  onExpenseAdded?: (expense: Expense) => void;
 }
 
 type ParticipantStatus =
@@ -167,9 +169,10 @@ function computeStatuses(
 
 const PAGE_SIZE = 20;
 
-export function ExpenseList({ roomId, expenses, settlements, credits, members, currentUserId, currentUserRole }: ExpenseListProps) {
+export function ExpenseList({ roomId, expenses, settlements, credits, members, currentUserId, currentUserRole, onExpenseRemoved, onExpenseAdded }: ExpenseListProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
   const [showSettlements, setShowSettlements] = useState(false);
@@ -285,8 +288,17 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
   async function handleDelete(expenseId: string) {
     setDeleting(expenseId);
     try {
-      await fetch(`/api/rooms/${roomId}/expenses/${expenseId}`, { method: "DELETE" });
-      router.refresh();
+      const res = await fetch(`/api/rooms/${roomId}/expenses/${expenseId}`, { method: "DELETE" });
+      if (res.ok) {
+        // Optimistically drop the card inside the refresh transition — it
+        // disappears instantly and stays gone once server data arrives.
+        startTransition(() => {
+          onExpenseRemoved?.(expenseId);
+          router.refresh();
+        });
+      } else {
+        router.refresh();
+      }
     } finally {
       setDeleting(null);
     }
@@ -311,7 +323,7 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
         <p className="text-gray-500 text-sm mb-5 max-w-xs">
           Add your first shared expense — rent, groceries, utilities — and SplitMate will split it for you.
         </p>
-        <AddExpenseDialog roomId={roomId} members={members} currentUserId={currentUserId} />
+        <AddExpenseDialog roomId={roomId} members={members} currentUserId={currentUserId} onOptimisticAdd={onExpenseAdded} />
       </div>
     );
   }
