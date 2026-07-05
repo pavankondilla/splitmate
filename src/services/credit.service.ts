@@ -80,7 +80,22 @@ export async function detectAndCreateCredit(
   // not building their own new credit. Subtract before creating a credit record.
   const pendingProposals = await proposalRepo.findPendingProposalsByPair(roomId, payerId, payeeId);
   const pendingProposalTotal = pendingProposals.reduce((sum, p) => sum + p.amount, 0);
-  const proposalAdjustedOverpayment = adjustedOverpayment - pendingProposalTotal;
+  let proposalAdjustedOverpayment = adjustedOverpayment - pendingProposalTotal;
+  if (proposalAdjustedOverpayment <= 0) return null;
+
+  // Same reasoning for proposals ALREADY confirmed by an earlier settlement:
+  // that portion of totalPaid went to someone else's credit debt, not the
+  // payer's own — it can never become the payer's overpayment. (Without this,
+  // paying own share + proposal as two equal settlements lets the second one
+  // register as pure overpayment once the first has confirmed the proposal.)
+  // Proposals sourced from the payee's own credits owed by the payer are
+  // skipped — totalCreditDebt above already subtracted those.
+  const confirmedProposals = await proposalRepo.findConfirmedProposalsByPair(roomId, payerId, payeeId);
+  const payeeCreditIds = new Set(payeeCreditsFromPayer.map((c) => c.id));
+  const confirmedProposalTotal = confirmedProposals
+    .filter((p) => !p.sourceCreditId || !payeeCreditIds.has(p.sourceCreditId))
+    .reduce((sum, p) => sum + p.amount, 0);
+  proposalAdjustedOverpayment -= confirmedProposalTotal;
   if (proposalAdjustedOverpayment <= 0) return null;
 
   // Only create credit for the DELTA above existing credit records for this pair.
@@ -172,7 +187,23 @@ export async function consumeCreditsOnSettlement(
     .filter((s) => s.payerId === payerId && s.payeeId === payeeId)
     .reduce((sum, s) => sum + s.amount, 0);
 
-  let remaining = computeCreditReturnPortion(settlementAmount, totalEffectiveOwed, totalPaid);
+  // Proposal payments are made on behalf of someone else's credit — they are
+  // neither payment of the payer's own debt nor a return of the payee's
+  // credit, so they must not count toward the return portion. Exclude the
+  // portion of THIS settlement that is about to confirm pending proposals
+  // (same matcher confirmProposalsForSettlement uses right after this hook)
+  // and the portions of past settlements that confirmed proposals.
+  const proposalsThisWillConfirm = await proposalRepo.getProposalsToConfirm(
+    roomId, payerId, payeeId, settlementAmount
+  );
+  const pendingCoveredByThis = proposalsThisWillConfirm.reduce((sum, p) => sum + p.amount, 0);
+  const confirmedProposals = await proposalRepo.findConfirmedProposalsByPair(roomId, payerId, payeeId);
+  const confirmedProposalTotal = confirmedProposals.reduce((sum, p) => sum + p.amount, 0);
+
+  const ownSettlementAmount = Math.max(0, settlementAmount - pendingCoveredByThis);
+  const ownTotalPaid = Math.max(0, totalPaid - pendingCoveredByThis - confirmedProposalTotal);
+
+  let remaining = computeCreditReturnPortion(ownSettlementAmount, totalEffectiveOwed, ownTotalPaid);
 
   // Consume credits proportional to how much of this settlement is an overpayment return
   if (remaining > 0) {
@@ -194,7 +225,7 @@ export async function consumeCreditsOnSettlement(
   // Fresh credits (usedCredit === 0) are untouched: they remain valid for
   // future expenses. This guards against totalEffectiveOwed=0 making any
   // A→B settlement incorrectly exhaust unrelated credits held by B.
-  if (totalEffectiveOwed > 0 && totalPaid >= totalEffectiveOwed) {
+  if (totalEffectiveOwed > 0 && ownTotalPaid >= totalEffectiveOwed) {
     for (const credit of activeCredits) {
       if (credit.usedCredit > 0) {
         await creditRepo.updateCreditUsed(credit.id, credit.totalCredit, true);

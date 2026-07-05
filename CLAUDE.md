@@ -269,6 +269,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 39 | Spurious Credit Created When Payer Confirms a Proposal Settlement | **Complete** |
 | 40 | Tab Reorder (Balances first) + Mobile Responsiveness Pass | **Complete** |
 | 41 | Realtime Updates (Optimistic UI + Pusher + Refresh-on-Focus) | **Complete** (needs Pusher env vars) |
+| 42 | Proposal-Aware Credit Detection & Consumption | **Complete** |
 
 ---
 
@@ -510,7 +511,29 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 41 — Complete. Realtime updates: optimistic UI + Pusher + refresh-on-focus.*
+*Last updated: Phase 42 — Complete. Proposal-aware credit detection & consumption.*
+
+---
+
+## Phase 42: Proposal-Aware Credit Detection & Consumption
+
+**Bug:** A (Aiverse) saw "₹400 credit available" in the Balances tab even though A held no credit. Room scenario: Pavan overpaid A ₹500 (credit owed by A), applied ₹400 to wifi paid by Charan → proposal "A pays C ₹400". A then paid C ₹400 **twice** — once for A's own wifi share, once for the proposal.
+
+**Root cause:** `confirmProposalsForSettlement` matched the proposal to the FIRST ₹400 settlement. When the SECOND ₹400 arrived, `detectAndCreateCredit` saw totalPaid ₹800 vs totalOwed ₹400 = ₹400 overpayment. The Phase 39 guard only subtracts **PROPOSED** proposals — this one was already **CONFIRMED** — so a spurious credit (userId=A, owedBy=C, ₹400, ACTIVE) was created. `GET /api/rooms/:id/credits` (used by the Balances-tab badge) returns credits held by the current user, so A saw ₹400 available; Phase 39's `myNet !== 0` UI guard didn't help because A's net was legitimately +₹300.
+
+**Fixes:**
+
+| File | Change |
+|---|---|
+| `proposal.repository.ts` | Added `findConfirmedProposalsByPair(roomId, fromUserId, toUserId)` |
+| `credit.service.ts` | `detectAndCreateCredit` now also subtracts CONFIRMED proposal totals for the (payer→payee) pair from the overpayment. Proposals whose `sourceCreditId` is one of the payee's own credits owed by the payer are skipped (already covered by the `totalCreditDebt` subtraction — avoids double counting). |
+| Data cleanup | Deleted the spurious credit row in room "memu" (holder=Aiverse, owedBy=Charan, ₹400, usedCredit=0). Deleted rather than exhausted: `detectAndCreateCredit`'s `existingTotal` dedup counts exhausted credits and would have suppressed future legitimate credits for the pair. Verified nothing referenced the row. |
+
+**Second gap (found in audit, same family):** `consumeCreditsOnSettlement` computed the credit-return portion from raw `totalPaid`/`settlementAmount`, which include proposal payments. If the settlement payee also holds their own credit owed by the payer, a proposal payment (forwarding a third member's credit) would wrongly consume the payee's credit — and the Phase 35 force-exhaust could fire early on inflated `totalPaid`.
+
+**Fix:** Before `computeCreditReturnPortion`, subtract (a) the portion of THIS settlement about to confirm pending proposals (via `getProposalsToConfirm` — the same matcher `confirmProposalsForSettlement` uses right after this hook, so the split is identical) and (b) confirmed proposal totals for the pair from past settlements. The force-exhaust check uses the adjusted `ownTotalPaid`. Flows without proposals for the pair are byte-identical to before (both adjustments are 0).
+
+**Verified:** Replayed the fixed detect math against live data — totalOwed 40000, totalPaid 80000, confirmed proposals 40000 → adjusted overpayment 0 → no credit created. Typecheck clean, all 49 tests pass.
 
 ---
 
