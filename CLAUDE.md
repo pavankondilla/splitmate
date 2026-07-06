@@ -541,6 +541,8 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 
 **Verified:** `tsc --noEmit` clean, 49/49 tests pass, `next build` succeeds (only pre-existing lint warnings).
 
+**Deployment (updated Phase 44):** The Vercel project is connected to the GitHub repo (`pavankondilla/splitmate`) — every branch push builds a Preview deployment, and every push/merge to `main` auto-deploys Production (splitmate.co.in). Manual `vercel deploy --prod` from a local machine is no longer needed. Rollback: `npx vercel rollback`.
+
 ---
 
 ## Phase 43: Members Tab Redesign (Total Spent + Spending/Payments Split)
