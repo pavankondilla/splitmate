@@ -165,25 +165,32 @@
     background: linear-gradient(135deg, #f7e18f 0%, #e0bd4f 45%, #bd9130 100%);
     color: #201806;
   }
-  /* Shimmer sweeps ONCE when the cursor reaches the button (or it gains
-     keyboard focus) — never loops while idle. */
+  /* One quick sweep every 10s (sweep lasts ~0.8s, still for the rest),
+     plus an immediate sweep on hover / keyboard focus. */
   .btn-gold::after {
     content: "";
     position: absolute;
     inset: 0;
     background: linear-gradient(105deg, transparent 38%, rgb(255 255 255 / 55%) 50%, transparent 62%);
     transform: translateX(-110%);
+    animation: gold-shimmer 10s linear infinite;
     pointer-events: none;
   }
   .btn-gold:hover::after,
   .btn-gold:focus-visible::after {
-    animation: gold-shimmer 0.7s ease-out forwards;
+    animation: gold-shimmer-hover 0.7s ease-out forwards;
   }
   @keyframes gold-shimmer {
+    0% { transform: translateX(-110%); }
+    8% { transform: translateX(110%); }
+    100% { transform: translateX(110%); }
+  }
+  @keyframes gold-shimmer-hover {
     from { transform: translateX(-110%); }
     to { transform: translateX(110%); }
   }
   @media (prefers-reduced-motion: reduce) {
+    .btn-gold::after,
     .btn-gold:hover::after,
     .btn-gold:focus-visible::after { animation: none; }
   }
