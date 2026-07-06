@@ -270,6 +270,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 40 | Tab Reorder (Balances first) + Mobile Responsiveness Pass | **Complete** |
 | 41 | Realtime Updates (Optimistic UI + Pusher + Refresh-on-Focus) | **Complete** (needs Pusher env vars) |
 | 42 | Proposal-Aware Credit Detection & Consumption | **Complete** |
+| 43 | Members Tab Redesign (Total Spent + Spending/Payments Split) | **Complete** |
 
 ---
 
@@ -511,7 +512,24 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 42 — Complete. Proposal-aware credit detection & consumption.*
+*Last updated: Phase 43 — Complete. Members tab redesign: total spent + spending/payments split.*
+
+---
+
+## Phase 43: Members Tab Redesign (Total Spent + Spending/Payments Split)
+
+**Goal:** Show each member's total spending and make the per-member history sum to it. Replaces the old mixed history list, which had three problems: green "+₹9,000 Paid for rent" next to red "−₹3,000 Share of wifi" (signs meant different things), the payer's own share was invisible, and settlements looked like extra spending.
+
+**Definition:** `Total spent = sum of the member's share_amount across all expenses` — including their own share of bills they paid and shares covered by credit (credit is the member's own money from an earlier overpayment; user decision). `Paid out of pocket = sum of expense.amount where paidBy = member`. Both computed at read time from props — no schema/API changes, UI-only (`members-view.tsx`).
+
+**Layout per member card:**
+- **Collapsed row:** "Spent ₹X" sub-line replaces the email (email moved into the expanded panel).
+- **Expanded panel:**
+  1. **Summary strip** — Total Spent / Paid Out of Pocket / Balance (3-col grid).
+  2. **Spending** — one line per expense share, oldest first: title, ✦ credit badge when creditApplied > 0 (shows partial amount if creditApplied < share; the real share amount stays visible), subtext "paid by X" or "paid the bill ₹total" when the member paid it. Neutral amounts, no +/− signs. Sum row at the bottom matches the card total.
+  3. **Payments (settling up)** — settlements in their own neutral section ("Paid → X" / "Received from X"), so they can't be mistaken for spending. Hidden when empty.
+
+Optimistic expenses/settlements from Phase 41 flow through unchanged (same props), so totals update instantly on add.
 
 ---
 
