@@ -41,7 +41,7 @@ export function CreateRoomDialog() {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+      <Button onClick={() => setOpen(true)} className="gap-2">
         <Plus className="h-4 w-4" /> Create Room
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -64,7 +64,7 @@ export function CreateRoomDialog() {
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Button type="submit" disabled={loading}>
                 {loading ? "Creating…" : "Create Room"}
               </Button>
             </div>

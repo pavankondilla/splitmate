@@ -73,7 +73,7 @@ export function RoomTabs({ roomId, roomName, inviteCode, members, expenses, sett
     <>
     <Tabs defaultValue="balances">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <TabsList className="bg-gray-100 w-full sm:w-auto">
+        <TabsList className="bg-muted w-full sm:w-auto">
           <TabsTrigger value="balances" className="flex-1 sm:flex-none">Balances</TabsTrigger>
           <TabsTrigger value="expenses" className="flex-1 sm:flex-none">Activity</TabsTrigger>
           <TabsTrigger value="members" className="flex-1 sm:flex-none">Members</TabsTrigger>
@@ -93,7 +93,7 @@ export function RoomTabs({ roomId, roomName, inviteCode, members, expenses, sett
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-rose-400 dark:border-rose-500/30 dark:hover:bg-rose-500/10 dark:hover:text-rose-300"
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 className="h-4 w-4" />

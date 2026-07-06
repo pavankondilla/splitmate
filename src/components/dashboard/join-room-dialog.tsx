@@ -65,7 +65,7 @@ export function JoinRoomDialog() {
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Button type="submit" disabled={loading}>
                 {loading ? "Joining…" : "Join Room"}
               </Button>
             </div>
