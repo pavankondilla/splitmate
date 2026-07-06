@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatCurrency } from "@/lib/format";
 import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, Sparkles, Bell, X } from "lucide-react";
 import { RecordSettlementDialog, type OptimisticSettlement } from "./record-settlement-dialog";
+import { CoinStackIcon, CreditTokenIcon } from "@/components/icons/category-icons";
 
 interface Balance {
   userId: string;
@@ -95,13 +96,13 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
   const otherBalances = balances.filter((b) => b.userId !== currentUserId);
 
   const profileBg = myNet > 0
-    ? "bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100"
+    ? "bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100 dark:from-emerald-500/10 dark:to-emerald-500/5 dark:border-emerald-500/20"
     : myNet < 0
-    ? "bg-gradient-to-br from-rose-50 to-red-50 border-rose-100"
-    : "bg-gradient-to-br from-gray-50 to-slate-50 border-gray-100";
+    ? "bg-gradient-to-br from-rose-50 to-red-50 border-rose-100 dark:from-rose-500/10 dark:to-rose-500/5 dark:border-rose-500/20"
+    : "bg-gradient-to-br from-gray-50 to-slate-50 border-gray-100 dark:from-muted/60 dark:to-muted/30 dark:border-border";
 
-  const balanceColor = myNet > 0 ? "text-emerald-600" : myNet < 0 ? "text-rose-600" : "text-gray-400";
-  const balanceLabel = myNet > 0 ? "You are owed" : myNet < 0 ? "You owe money" : "All settled up ✅";
+  const balanceColor = myNet > 0 ? "text-emerald-600 dark:text-emerald-400" : myNet < 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground";
+  const balanceLabel = myNet > 0 ? "You are owed" : myNet < 0 ? "You owe money" : "All settled up";
 
   // Proposals where YOU must pay
   const myProposals = proposals.filter((p) => p.fromUserId === currentUserId);
@@ -116,35 +117,35 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <Bell className="h-4 w-4 text-amber-500 shrink-0" />
-            <h3 className="text-xs font-bold text-amber-600 uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
               Action Required
             </h3>
           </div>
           {myProposals.map((proposal) => (
             <div key={proposal.id}
-              className="rounded-xl bg-amber-50 border border-amber-200 shadow-sm overflow-hidden">
+              className="rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/25 shadow-sm overflow-hidden">
               <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                      <Bell className="h-4 w-4 text-amber-600" />
+                    <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center shrink-0">
+                      <Bell className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm">
+                      <p className="font-semibold text-foreground text-sm">
                         Pay {proposal.toUserName}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                         {proposal.reason}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2 shrink-0">
-                    <p className="text-xl font-bold text-amber-700">
+                    <p className="font-money text-xl font-bold text-amber-700 dark:text-amber-300">
                       {formatCurrency(proposal.amount)}
                     </p>
                     <button
                       onClick={() => dismissProposal(proposal.id)}
-                      className="text-gray-400 hover:text-gray-600 mt-0.5"
+                      className="text-muted-foreground hover:text-foreground mt-0.5"
                       title="Dismiss"
                     >
                       <X className="h-4 w-4" />
@@ -161,7 +162,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                   prefillAmount={proposal.amount}
                   onOptimisticRecord={onOptimisticSettlement}
                   triggerLabel={`Pay ${proposal.toUserName} ${formatCurrency(proposal.amount)}`}
-                  triggerClassName="w-full gap-2 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 font-semibold"
+                  triggerClassName="w-full gap-2 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/15 font-semibold"
                 />
               </div>
             </div>
@@ -173,22 +174,22 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
       {incomingProposals.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 px-1">
-            <Sparkles className="h-4 w-4 text-indigo-500 shrink-0" />
-            <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <h3 className="text-xs font-bold text-primary uppercase tracking-wider">
               Incoming Payments
             </h3>
           </div>
           {incomingProposals.map((proposal) => (
             <div key={proposal.id}
-              className="rounded-xl bg-indigo-50 border border-indigo-100 p-4 shadow-sm">
+              className="rounded-xl bg-indigo-50 border border-indigo-100 dark:bg-primary/10 dark:border-primary/20 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">
+                  <p className="font-semibold text-foreground text-sm">
                     {proposal.fromUserName} will pay you
                   </p>
-                  <p className="text-xs text-gray-500 mt-0.5">{proposal.reason}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{proposal.reason}</p>
                 </div>
-                <p className="text-xl font-bold text-indigo-600 shrink-0">
+                <p className="font-money text-xl font-bold text-primary shrink-0">
                   {formatCurrency(proposal.amount)}
                 </p>
               </div>
@@ -203,19 +204,19 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
           <div className="flex items-center gap-3 min-w-0">
             <Avatar className="h-12 w-12 shrink-0">
               <AvatarFallback className={`text-sm font-bold ${
-                myNet > 0 ? "bg-emerald-200 text-emerald-800"
-                : myNet < 0 ? "bg-rose-200 text-rose-800"
-                : "bg-gray-200 text-gray-700"
+                myNet > 0 ? "bg-emerald-200 text-emerald-800 dark:bg-emerald-500/25 dark:text-emerald-200"
+                : myNet < 0 ? "bg-rose-200 text-rose-800 dark:bg-rose-500/25 dark:text-rose-200"
+                : "bg-muted text-muted-foreground"
               }`}>
                 {initials(myBalance?.userName ?? "?")}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-bold text-gray-900 text-base truncate">{myBalance?.userName ?? "You"}</p>
-                <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">You</span>
+                <p className="font-bold text-foreground text-base truncate">{myBalance?.userName ?? "You"}</p>
+                <span className="text-xs bg-indigo-100 text-indigo-700 dark:bg-primary/20 dark:text-indigo-300 px-2 py-0.5 rounded-full font-semibold">You</span>
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {myNet === 0
                   ? "No pending payments"
                   : myNet > 0
@@ -226,8 +227,8 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
           </div>
 
           <div className="text-right shrink-0">
-            <p className="text-xs text-gray-500 mb-1">Your Balance</p>
-            <p className={`text-2xl sm:text-3xl font-bold tracking-tight ${balanceColor}`}>
+            <p className="text-xs text-muted-foreground mb-1">Your Balance</p>
+            <p className={`font-money text-2xl sm:text-3xl font-bold tracking-tight ${balanceColor}`}>
               {myNet === 0
                 ? "₹0"
                 : myNet > 0
@@ -238,31 +239,31 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 mt-4 pt-3 border-t border-black/5 text-xs text-gray-500">
+        <div className="flex flex-wrap gap-4 mt-4 pt-3 border-t border-black/5 dark:border-white/10 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5" />
             <span>{balances.length} members</span>
           </div>
           {myDebts.length > 0 && (
-            <div className="flex items-center gap-1.5 text-rose-500 font-medium">
+            <div className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400 font-medium">
               <Clock className="h-3.5 w-3.5" />
               <span>{myDebts.length} payment{myDebts.length !== 1 ? "s" : ""} pending</span>
             </div>
           )}
           {myCredits.length > 0 && (
-            <div className="flex items-center gap-1.5 text-emerald-500 font-medium">
+            <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400 font-medium">
               <TrendingUp className="h-3.5 w-3.5" />
               <span>{myCredits.length} awaiting payment</span>
             </div>
           )}
           {availableCredit > 0 && myNet !== 0 && (
-            <div className="flex items-center gap-1.5 text-blue-500 font-medium">
-              <Sparkles className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-1.5 text-blue-500 dark:text-blue-400 font-medium">
+              <CreditTokenIcon size={13} />
               <span>{formatCurrency(availableCredit)} credit available</span>
             </div>
           )}
           {myNet === 0 && (
-            <div className="flex items-center gap-1.5 text-emerald-500 font-medium">
+            <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400 font-medium">
               <CheckCircle2 className="h-3.5 w-3.5" />
               <span>Fully settled</span>
             </div>
@@ -275,39 +276,39 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
-            <h3 className="text-xs font-bold text-rose-600 uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
               Payment Required
             </h3>
           </div>
           {myDebts.map((debt) => (
             <div key={`${debt.fromUserId}-${debt.toUserId}`}
-              className="rounded-xl bg-white border border-rose-200 shadow-sm overflow-hidden">
+              className="rounded-xl bg-card border border-rose-200 dark:border-rose-500/25 shadow-sm overflow-hidden">
               <div className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <Avatar className="h-10 w-10 shrink-0">
-                      <AvatarFallback className="bg-rose-100 text-rose-700 text-sm font-bold">
+                      <AvatarFallback className="bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 text-sm font-bold">
                         {initials(debt.toUserName)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm truncate">
+                      <p className="font-semibold text-foreground text-sm truncate">
                         Pay {debt.toUserName}
                       </p>
-                      <p className="text-xs text-gray-400 truncate">
+                      <p className="text-xs text-muted-foreground truncate">
                         {memberEmailMap.get(debt.toUserId) ?? ""}
                       </p>
                       <div className="flex items-center gap-1 mt-1">
                         <Clock className="h-3 w-3 text-amber-500 shrink-0" />
-                        <span className="text-xs text-amber-600 font-medium">Pending</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending</span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-2xl font-bold text-rose-600 leading-none">
+                    <p className="font-money text-2xl font-bold text-rose-600 dark:text-rose-400 leading-none">
                       {formatCurrency(debt.amount)}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">to be paid</p>
+                    <p className="text-xs text-muted-foreground mt-1">to be paid</p>
                   </div>
                 </div>
               </div>
@@ -320,7 +321,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                   prefillAmount={debt.amount}
                   onOptimisticRecord={onOptimisticSettlement}
                   triggerLabel="Settle Now"
-                  triggerClassName="w-full gap-2 border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 font-semibold"
+                  triggerClassName="w-full gap-2 border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10 font-semibold"
                 />
               </div>
             </div>
@@ -333,38 +334,38 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <TrendingUp className="h-4 w-4 text-emerald-500 shrink-0" />
-            <h3 className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
               Owed To You
             </h3>
           </div>
           {myCredits.map((credit) => (
             <div key={`${credit.fromUserId}-${credit.toUserId}`}
-              className="rounded-xl bg-white border border-emerald-200 shadow-sm p-4">
+              className="rounded-xl bg-card border border-emerald-200 dark:border-emerald-500/25 shadow-sm p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className="h-10 w-10 shrink-0">
-                    <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-bold">
+                    <AvatarFallback className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 text-sm font-bold">
                       {initials(credit.fromUserName)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm truncate">
+                    <p className="font-semibold text-foreground text-sm truncate">
                       {credit.fromUserName}
                     </p>
-                    <p className="text-xs text-gray-400 truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {memberEmailMap.get(credit.fromUserId) ?? ""}
                     </p>
                     <div className="flex items-center gap-1 mt-1">
                       <Clock className="h-3 w-3 text-amber-500 shrink-0" />
-                      <span className="text-xs text-amber-600 font-medium">Waiting to pay you</span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Waiting to pay you</span>
                     </div>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-2xl font-bold text-emerald-600 leading-none">
+                  <p className="font-money text-2xl font-bold text-emerald-600 dark:text-emerald-400 leading-none">
                     {formatCurrency(credit.amount)}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">owed to you</p>
+                  <p className="text-xs text-muted-foreground mt-1">owed to you</p>
                 </div>
               </div>
             </div>
@@ -375,7 +376,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
       {/* ── CARD 3: OTHER ROOM MEMBERS ── */}
       {otherBalances.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
             Room Members
           </h3>
           {otherBalances.map((b) => {
@@ -397,23 +398,23 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
 
             return (
               <div key={b.userId}
-                className="rounded-xl bg-white border border-gray-100 p-4 flex items-center justify-between gap-3 shadow-sm">
+                className="rounded-xl bg-card border border-border p-4 flex items-center justify-between gap-3 shadow-sm">
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className="h-9 w-9 shrink-0">
-                    <AvatarFallback className="bg-indigo-100 text-indigo-700 text-xs font-bold">
+                    <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-primary/20 dark:text-indigo-300 text-xs font-bold">
                       {initials(b.userName)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900 text-sm truncate">{b.userName}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{statusNote}</p>
+                    <p className="font-medium text-foreground text-sm truncate">{b.userName}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{statusNote}</p>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`font-bold text-base ${
-                    isNeutral ? "text-gray-400"
-                    : isPositive ? "text-emerald-600"
-                    : "text-rose-600"
+                  <p className={`font-money font-bold text-base ${
+                    isNeutral ? "text-muted-foreground"
+                    : isPositive ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
                   }`}>
                     {isNeutral
                       ? "₹0"
@@ -422,7 +423,9 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                       : `-${formatCurrency(Math.abs(b.netBalance))}`}
                   </p>
                   {isNeutral && (
-                    <p className="text-xs text-emerald-500 font-medium mt-0.5">✅ Settled</p>
+                    <p className="flex items-center justify-end gap-1 text-xs text-emerald-500 dark:text-emerald-400 font-medium mt-0.5">
+                      <CheckCircle2 className="h-3 w-3" /> Settled
+                    </p>
                   )}
                 </div>
               </div>
@@ -434,16 +437,19 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
       {/* Empty / settled state */}
       {myNet === 0 && myDebts.length === 0 && myCredits.length === 0 && (
         expenseCount === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-4xl mb-3">📊</p>
-            <p className="font-semibold text-gray-700">No balances yet</p>
-            <p className="text-sm text-gray-400 mt-1">Add your first expense in the Activity tab to see balances here.</p>
+          <div className="flex flex-col items-center text-center py-10">
+            <CoinStackIcon size={56} className="mb-3" />
+            <p className="font-semibold text-foreground/90">No balances yet</p>
+            <p className="text-sm text-muted-foreground mt-1">Add your first expense in the Activity tab to see balances here.</p>
           </div>
         ) : (
-          <div className="text-center py-8">
-            <p className="text-4xl mb-3">🎉</p>
-            <p className="font-semibold text-gray-700">Everyone is settled up!</p>
-            <p className="text-sm text-gray-400 mt-1">No pending payments in this room.</p>
+          <div className="flex flex-col items-center text-center py-8">
+            <span className="inline-flex items-center gap-2 rounded-full border border-gold/40 bg-gold/10 px-4 py-2 mb-3">
+              <span className="h-2 w-2 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />
+              <span className="text-sm font-semibold text-gold-foreground dark:text-gold">All settled up</span>
+            </span>
+            <p className="font-semibold text-foreground/90">Everyone is settled up!</p>
+            <p className="text-sm text-muted-foreground mt-1">No pending payments in this room.</p>
           </div>
         )
       )}

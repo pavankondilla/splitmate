@@ -271,6 +271,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 41 | Realtime Updates (Optimistic UI + Pusher + Refresh-on-Focus) | **Complete** (needs Pusher env vars) |
 | 42 | Proposal-Aware Credit Detection & Consumption | **Complete** |
 | 43 | Members Tab Redesign (Total Spent + Spending/Payments Split) | **Complete** |
+| 44 | Sovereign Indigo UI (theme tokens + dark mode + Cut Badge icon + icon kit) | **Complete** |
 
 ---
 
@@ -512,7 +513,33 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 43 — Complete. Members tab redesign: total spent + spending/payments split.*
+*Last updated: Phase 44 — Complete. Sovereign Indigo UI: theme tokens, dark mode, Cut Badge brand icon, category icon kit.*
+
+---
+
+## Phase 44: Sovereign Indigo UI (Design System + Dark Mode + Brand Assets)
+
+**Frontend-only redesign — zero changes to API routes, services, repositories, schemas, or DB.** The user selected the "Sovereign Indigo" proposal (Cut Badge icon B + light/dark toggle) after four design iterations.
+
+**Design language:**
+- **Indigo = brand** (buttons, links, active states) — evolution of the pre-existing indigo, not a rebrand
+- **Gold = money** (`.btn-gold` shimmer on Add Expense / Record Settlement / Confirm; `.font-money` Fraunces serif + tabular-nums on ₹ figures)
+- **Blue = credit** (banner, Apply-credit button, credit chips, `CreditTokenIcon`) — never gold, never confused with balances
+- **Green/rose = owed/owes** (kept, with dark: variants); pending stays amber/muted, never red
+- **No floating animations** (user decision — "floating doesn't look professional")
+
+| Piece | Files |
+|---|---|
+| Token system (light + dark oklch) | `globals.css` — full Sovereign Indigo palette replaces shadcn neutral; `--gold` token; `.btn-gold` + `.font-money` utilities |
+| Fonts | `layout.tsx` — Fraunces (`--font-fraunces`) via next/font for money figures + wordmark; Geist stays body |
+| Dark mode | `next-themes` (class strategy) + `theme-provider.tsx`; `theme-toggle.tsx` (sun/moon) in header; light is default |
+| Brand mark ("Cut Badge") | `src/app/icon.svg` (monoline SM paths, no font dependency), `apple-icon.png` + multi-size `favicon.ico` (generated via sharp), `splitmate-logo.tsx` header logo |
+| Icon kit (replaces ALL emojis) | `src/components/icons/category-icons.tsx` — Rent/Groceries/Vegetables/Utilities/Wifi/Other + Coin/CoinStack/CreditToken, Duolingo-style flat vectors; `CategoryIcon` mapper (VEGETABLES icon exists for future use; DB enum unchanged) |
+| Dark-mode sweep | All `(app)` pages, room components, dialogs, skeletons: hardcoded gray/white → theme tokens (`bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`) + `dark:` variants for semantic tints. Public pages (landing, join, terms, privacy) remain light-committed. |
+
+**Regenerating brand assets:** `icon.svg` is the source of truth; apple-icon.png/favicon.ico were produced from it with sharp (see Phase 44 commit). Keep the three in sync if the mark changes.
+
+**Verified:** `tsc --noEmit` clean, 49/49 tests pass, `next build` succeeds (only pre-existing lint warnings).
 
 ---
 

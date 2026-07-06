@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function RoomCardSkeleton() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
       {/* Title */}
       <Skeleton className="h-5 w-2/5" />
       {/* Stats row */}

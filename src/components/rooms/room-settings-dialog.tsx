@@ -92,7 +92,7 @@ export function RoomSettingsDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-gray-500" />
+            <Settings className="h-5 w-5 text-muted-foreground" />
             Room Settings
           </DialogTitle>
         </DialogHeader>
@@ -113,20 +113,20 @@ export function RoomSettingsDialog({
                 type="submit"
                 size="sm"
                 disabled={renaming || !name.trim() || name.trim() === roomName}
-                className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="shrink-0"
               >
                 {renaming ? "Saving..." : "Save"}
               </Button>
             </div>
           </form>
 
-          <div className="border-t border-gray-100" />
+          <div className="border-t border-border" />
 
           {/* Invite code */}
           <div className="space-y-2">
             <Label>Invite Code</Label>
             <div className="flex gap-2 items-center">
-              <code className="flex-1 text-sm font-mono bg-gray-100 px-3 py-2 rounded text-gray-800 tracking-widest">
+              <code className="flex-1 text-sm font-mono bg-muted px-3 py-2 rounded text-foreground/90 tracking-widest">
                 {inviteCode}
               </code>
               <Button variant="outline" size="sm" onClick={handleCopy} className="shrink-0 gap-1.5">
@@ -139,12 +139,12 @@ export function RoomSettingsDialog({
               size="sm"
               onClick={handleRegenerate}
               disabled={regenerating}
-              className="w-full gap-2 text-amber-700 border-amber-200 hover:bg-amber-50"
+              className="w-full gap-2 text-amber-700 border-amber-200 hover:bg-amber-50 dark:text-amber-300 dark:border-amber-500/30 dark:hover:bg-amber-500/10"
             >
               <RefreshCw className="h-4 w-4" />
               {regenerating ? "Regenerating..." : "Regenerate Code"}
             </Button>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               Regenerating will invalidate the current invite link.
             </p>
           </div>

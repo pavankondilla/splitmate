@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function ExpenseCardSkeleton() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+    <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {/* Category icon */}
@@ -47,7 +47,7 @@ export default function RoomLoading() {
 
       {/* Tabs + actions row */}
       <div className="flex items-center justify-between">
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+        <div className="flex gap-1 bg-muted p-1 rounded-lg">
           <Skeleton className="h-7 w-20 rounded-md" />
           <Skeleton className="h-7 w-20 rounded-md" />
           <Skeleton className="h-7 w-20 rounded-md" />

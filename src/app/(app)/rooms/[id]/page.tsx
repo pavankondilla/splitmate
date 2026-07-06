@@ -63,10 +63,10 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
       {/* Room header */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900 break-words">{room.name}</h1>
+          <h1 className="text-2xl font-bold text-foreground break-words">{room.name}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="text-sm text-gray-500">Invite code:</span>
-            <code className="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-800 tracking-widest">
+            <span className="text-sm text-muted-foreground">Invite code:</span>
+            <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded text-foreground/90 tracking-widest">
               {room.inviteCode}
             </code>
             <Badge variant="secondary">{room.currency}</Badge>
@@ -76,7 +76,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
         <a
           href={`/api/rooms/${room.id}/export`}
           download
-          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors"
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-muted-foreground border border-border rounded-lg bg-card hover:bg-muted transition-colors"
         >
           <Download className="h-4 w-4" />
           <span className="hidden sm:inline">Export CSV</span>

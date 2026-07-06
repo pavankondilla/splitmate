@@ -124,7 +124,7 @@ export function AddExpenseDialog({ roomId, members, currentUserId, onOptimisticA
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+      <Button onClick={() => setOpen(true)} className="btn-gold gap-2">
         <Plus className="h-4 w-4" />
         <span className="sm:hidden">Add</span>
         <span className="hidden sm:inline">Add Expense</span>
@@ -179,8 +179,8 @@ export function AddExpenseDialog({ roomId, members, currentUserId, onOptimisticA
                     onClick={() => toggleParticipant(m.id)}
                     className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                       participantIds.includes(m.id)
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card text-muted-foreground border-border hover:border-primary/50"
                     }`}
                   >
                     {m.name}
@@ -195,7 +195,7 @@ export function AddExpenseDialog({ roomId, members, currentUserId, onOptimisticA
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Button type="submit" disabled={loading} className="btn-gold">
                 {loading ? "Adding…" : "Add Expense"}
               </Button>
             </div>

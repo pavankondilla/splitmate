@@ -156,8 +156,8 @@ export function EditExpenseDialog({ roomId, members, expense, open, onOpenChange
                   onClick={() => toggleParticipant(m.id)}
                   className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                     participantIds.includes(m.id)
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-muted-foreground border-border hover:border-primary/50"
                   }`}
                 >
                   {m.name}
@@ -172,7 +172,7 @@ export function EditExpenseDialog({ roomId, members, expense, open, onOpenChange
           {error && <p className="text-sm text-rose-600">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Button type="submit" disabled={loading}>
               {loading ? "Saving…" : "Save changes"}
             </Button>
           </div>

@@ -10,7 +10,7 @@ export default function ProfileLoading() {
       </div>
 
       {/* Profile card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-8">
+      <div className="bg-card rounded-xl border border-border p-6 shadow-sm space-y-8">
         {/* Avatar + name/email */}
         <div className="flex items-center gap-5">
           <Skeleton className="h-20 w-20 rounded-full shrink-0" />

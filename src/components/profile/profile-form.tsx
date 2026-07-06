@@ -64,35 +64,35 @@ export function ProfileForm({ name, email, avatarUrl }: ProfileFormProps) {
           <img
             src={avatarUrl}
             alt={name}
-            className="h-20 w-20 rounded-full object-cover ring-2 ring-gray-100"
+            className="h-20 w-20 rounded-full object-cover ring-2 ring-border"
           />
         ) : (
-          <div className="h-20 w-20 rounded-full bg-indigo-100 flex items-center justify-center text-2xl font-bold text-indigo-600 ring-2 ring-gray-100">
+          <div className="h-20 w-20 rounded-full bg-indigo-100 dark:bg-primary/20 flex items-center justify-center text-2xl font-bold text-indigo-600 dark:text-indigo-300 ring-2 ring-border">
             {initials}
           </div>
         )}
         <div>
-          <p className="font-semibold text-gray-900">{name}</p>
-          <p className="text-sm text-gray-500">{email}</p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="font-semibold text-foreground">{name}</p>
+          <p className="text-sm text-muted-foreground">{email}</p>
+          <p className="text-xs text-muted-foreground mt-1">
             Avatar syncs automatically from your sign-in account.
           </p>
         </div>
       </div>
 
-      <div className="border-t border-gray-100" />
+      <div className="border-t border-border" />
 
       {/* Display name form */}
       <form onSubmit={handleSave} className="space-y-4">
         <div>
-          <Label htmlFor="display-name" className="text-sm font-medium text-gray-700">
+          <Label htmlFor="display-name" className="text-sm font-medium text-foreground/90">
             Display name
           </Label>
-          <p className="text-xs text-gray-400 mt-0.5 mb-2">
+          <p className="text-xs text-muted-foreground mt-0.5 mb-2">
             This is the name shown on expenses, balances, and the activity feed.
           </p>
           <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               id="display-name"
               value={displayName}
@@ -108,7 +108,7 @@ export function ProfileForm({ name, email, avatarUrl }: ProfileFormProps) {
         <Button
           type="submit"
           disabled={saving || !isDirty}
-          className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+          className="gap-2"
         >
           {saved ? (
             <>
@@ -123,28 +123,28 @@ export function ProfileForm({ name, email, avatarUrl }: ProfileFormProps) {
         </Button>
       </form>
 
-      <div className="border-t border-gray-100" />
+      <div className="border-t border-border" />
 
       {/* Read-only email */}
       <div className="space-y-2">
-        <Label className="text-sm font-medium text-gray-700">Email address</Label>
+        <Label className="text-sm font-medium text-foreground/90">Email address</Label>
         <div className="relative">
-          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input value={email} readOnly className="pl-9 bg-gray-50 text-gray-500 cursor-default" />
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={email} readOnly className="pl-9 bg-muted text-muted-foreground cursor-default" />
         </div>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           Email is managed by your sign-in provider and cannot be changed here.
         </p>
       </div>
 
-      <div className="border-t border-gray-100" />
+      <div className="border-t border-border" />
 
       {/* Clerk portal link */}
-      <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 flex items-start gap-3">
-        <ExternalLink className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+      <div className="rounded-lg bg-muted/50 border border-border p-4 flex items-start gap-3">
+        <ExternalLink className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-medium text-gray-700">Password, avatar &amp; security</p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-sm font-medium text-foreground/90">Password, avatar &amp; security</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Use the account menu in the top-right corner of the screen to manage your password,
             profile photo, and connected accounts.
           </p>

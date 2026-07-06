@@ -93,7 +93,7 @@ export function RecordSettlementDialog({ roomId, members, currentUserId, prefill
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className={triggerClassName ?? "gap-2"}>
+      <Button variant="outline" onClick={() => setOpen(true)} className={triggerClassName ?? "btn-gold gap-2"}>
         <CheckCircle className="h-4 w-4" />
         {triggerLabel ?? (
           <>
@@ -139,7 +139,7 @@ export function RecordSettlementDialog({ roomId, members, currentUserId, prefill
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Button type="submit" disabled={loading} className="btn-gold">
                 {loading ? "Saving…" : "Confirm"}
               </Button>
             </div>
