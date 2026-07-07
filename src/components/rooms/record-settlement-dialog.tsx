@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Lock } from "lucide-react";
 
 interface Member { id: string; name: string }
 
@@ -30,12 +30,16 @@ interface RecordSettlementDialogProps {
   currentUserId: string;
   prefillPayeeId?: string;
   prefillAmount?: number; // in paise
+  // Guided entry points (Settle Now / Pay X proposals) lock payer & payee:
+  // proposal confirmation matches the exact payer→payee pair, so editing
+  // them here would leave the proposal pending and mint a spurious credit.
+  lockParties?: boolean;
   triggerLabel?: string;
   triggerClassName?: string;
   onOptimisticRecord?: (settlement: OptimisticSettlement) => void;
 }
 
-export function RecordSettlementDialog({ roomId, members, currentUserId, prefillPayeeId, prefillAmount, triggerLabel, triggerClassName, onOptimisticRecord }: RecordSettlementDialogProps) {
+export function RecordSettlementDialog({ roomId, members, currentUserId, prefillPayeeId, prefillAmount, lockParties, triggerLabel, triggerClassName, onOptimisticRecord }: RecordSettlementDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -79,7 +83,7 @@ export function RecordSettlementDialog({ roomId, members, currentUserId, prefill
         onBehalfOfUserId: null,
       };
       setOpen(false);
-      setForm({ payerId: currentUserId, payeeId: "", amount: "", note: "" });
+      setForm({ payerId: currentUserId, payeeId: prefillPayeeId ?? "", amount: "", note: "" });
       startTransition(() => {
         onOptimisticRecord?.(optimistic);
         router.refresh();
@@ -108,26 +112,47 @@ export function RecordSettlementDialog({ roomId, members, currentUserId, prefill
             <DialogTitle>Record a settlement</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <div className="space-y-1.5">
-              <Label>From (payer)</Label>
-              <Select value={form.payerId} onValueChange={(v) => setForm({ ...form, payerId: v ?? form.payerId })}>
-                <SelectTrigger><SelectValue placeholder="Select member">{memberMap.get(form.payerId)}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>To (receiver)</Label>
-              <Select value={form.payeeId} onValueChange={(v) => setForm({ ...form, payeeId: v ?? form.payeeId })}>
-                <SelectTrigger><SelectValue placeholder="Select member">{memberMap.get(form.payeeId)}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  {members.filter((m) => m.id !== form.payerId).map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {lockParties ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>From (payer)</Label>
+                  <div className="flex h-9 items-center gap-1.5 rounded-md border border-input bg-muted px-3 text-sm text-foreground">
+                    <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate">{memberMap.get(form.payerId)}</span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>To (receiver)</Label>
+                  <div className="flex h-9 items-center gap-1.5 rounded-md border border-input bg-muted px-3 text-sm text-foreground">
+                    <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate">{memberMap.get(form.payeeId)}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label>From (payer)</Label>
+                  <Select value={form.payerId} onValueChange={(v) => setForm({ ...form, payerId: v ?? form.payerId })}>
+                    <SelectTrigger><SelectValue placeholder="Select member">{memberMap.get(form.payerId)}</SelectValue></SelectTrigger>
+                    <SelectContent>
+                      {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>To (receiver)</Label>
+                  <Select value={form.payeeId} onValueChange={(v) => setForm({ ...form, payeeId: v ?? form.payeeId })}>
+                    <SelectTrigger><SelectValue placeholder="Select member">{memberMap.get(form.payeeId)}</SelectValue></SelectTrigger>
+                    <SelectContent>
+                      {members.filter((m) => m.id !== form.payerId).map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="space-y-1.5">
               <Label>Amount (₹)</Label>
               <Input type="number" placeholder="0.00" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />

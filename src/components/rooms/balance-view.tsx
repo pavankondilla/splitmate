@@ -160,6 +160,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                   currentUserId={currentUserId}
                   prefillPayeeId={proposal.toUserId}
                   prefillAmount={proposal.amount}
+                  lockParties
                   onOptimisticRecord={onOptimisticSettlement}
                   triggerLabel={`Pay ${proposal.toUserName} ${formatCurrency(proposal.amount)}`}
                   triggerClassName="w-full gap-2 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/15 font-semibold"
@@ -319,6 +320,7 @@ export function BalanceView({ roomId, balances, pairwise, members, currentUserId
                   currentUserId={currentUserId}
                   prefillPayeeId={debt.toUserId}
                   prefillAmount={debt.amount}
+                  lockParties
                   onOptimisticRecord={onOptimisticSettlement}
                   triggerLabel="Settle Now"
                   triggerClassName="w-full gap-2 border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10 font-semibold"

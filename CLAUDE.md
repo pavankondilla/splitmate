@@ -273,6 +273,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 43 | Members Tab Redesign (Total Spent + Spending/Payments Split) | **Complete** |
 | 44 | Sovereign Indigo UI (theme tokens + dark mode + Cut Badge icon + icon kit) | **Complete** |
 | 45 | Same-Day Expense Ordering Fix (Activity feed) | **Complete** |
+| 46 | Locked Payer/Payee in Guided Settlement Dialogs | **Complete** |
 
 ---
 
@@ -514,7 +515,22 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 45 — Complete. Same-day expense ordering fix in Activity feed.*
+*Last updated: Phase 46 — Complete. Locked payer/payee fields in guided settlement dialogs.*
+
+---
+
+## Phase 46: Locked Payer/Payee in Guided Settlement Dialogs
+
+**Problem:** The guided settlement buttons in the Balances tab ("Settle Now" on a debt, "Pay X ₹Y" on a proposal) opened the same fully-editable form as the free-form header Record Settlement button. A user could change the payer or payee before confirming — but proposal confirmation (`confirmProposalsForSettlement`) matches the exact payer→payee pair, so a mis-edit left the proposal pending and could mint a spurious credit (the Phase 37/39/42 bug family).
+
+**Fix (UI-only, no API/schema/service changes):**
+
+| File | Change |
+|---|---|
+| `record-settlement-dialog.tsx` | New `lockParties` prop. When set, From/To render as read-only rows (lock icon + name, 2-col grid) instead of Selects. Amount + note stay editable (partial payments still work). Post-submit reset restores the prefilled payee. |
+| `balance-view.tsx` | Both guided entry points pass `lockParties`: proposal "Pay X ₹Y" and debt "Settle Now" |
+
+**Design principle:** Guided buttons = one-tap confirmation of exactly the advertised payer→payee payment. Free-form entry (any payer/payee/amount — the entry point for overpayments/credits and third-party payments) remains available only via the header **Record Settlement** button (`room-tabs.tsx`, unchanged).
 
 ---
 
