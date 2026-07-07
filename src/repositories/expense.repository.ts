@@ -1,4 +1,4 @@
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, desc, eq, isNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, expenseParticipants, type NewExpense, type NewExpenseParticipant } from "@/db/schema";
 
@@ -25,7 +25,8 @@ export async function findExpensesByRoomId(roomId: string) {
   return db
     .select()
     .from(expenses)
-    .where(and(eq(expenses.roomId, roomId), isNull(expenses.deletedAt)));
+    .where(and(eq(expenses.roomId, roomId), isNull(expenses.deletedAt)))
+    .orderBy(desc(expenses.expenseDate), desc(expenses.createdAt));
 }
 
 export async function findParticipantsByExpenseId(expenseId: string) {

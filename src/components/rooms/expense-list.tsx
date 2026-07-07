@@ -267,7 +267,14 @@ export function ExpenseList({ roomId, expenses, settlements, credits, members, c
     }
     return Array.from(groups.values())
       .sort((a, b) => b.sortKey - a.sortKey)
-      .map((g) => ({ label: g.label, expenses: g.exps }));
+      .map((g) => ({
+        label: g.label,
+        // Within a day, newest entry first — expenseDate has no clock time,
+        // so createdAt (full timestamp) is the only stable same-day order.
+        expenses: [...g.exps].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+      }));
   }, [expenses]);
 
   // Slice groups to visibleCount total expenses (newest first).
