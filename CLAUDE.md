@@ -272,6 +272,7 @@ POST   /api/webhooks/clerk           Sync Clerk user to DB
 | 42 | Proposal-Aware Credit Detection & Consumption | **Complete** |
 | 43 | Members Tab Redesign (Total Spent + Spending/Payments Split) | **Complete** |
 | 44 | Sovereign Indigo UI (theme tokens + dark mode + Cut Badge icon + icon kit) | **Complete** |
+| 45 | Same-Day Expense Ordering Fix (Activity feed) | **Complete** |
 
 ---
 
@@ -513,7 +514,24 @@ UI/read-path only — no migration, retroactively corrects displayed state.
 | `components/rooms/expense-list.tsx` | Added pencil button, `editingExpense` state, `notes` field to `Expense` interface |
 | `components/rooms/room-tabs.tsx` | Added `notes` field to local `Expense` type |
 
-*Last updated: Phase 44 — Complete. Sovereign Indigo UI: theme tokens, dark mode, Cut Badge brand icon, category icon kit.*
+*Last updated: Phase 45 — Complete. Same-day expense ordering fix in Activity feed.*
+
+---
+
+## Phase 45: Same-Day Expense Ordering Fix (Activity Feed)
+
+**Bug:** Expenses added on the same date appeared in random order in the Activity tab, and the order could change between page loads.
+
+**Root cause:** `findExpensesByRoomId` had no `ORDER BY` — Postgres returned rows in arbitrary order. The Activity feed groups expenses by `expense_date` (a DATE column with no clock time) and sorts the *groups* newest-first, but never sorted expenses *within* a same-day group, so they kept the arbitrary DB order.
+
+**Fix (follows the Phase 21 convention: `expense_date` for display/grouping, `createdAt` for ordering):**
+
+| File | Change |
+|---|---|
+| `expense.repository.ts` | `findExpensesByRoomId` now orders by `expense_date DESC, created_at DESC` — authoritative server-side ordering with full-timestamp tiebreak |
+| `expense-list.tsx` | Each day-group is explicitly sorted by `createdAt` desc after grouping — keeps order stable client-side and snaps optimistic adds (Phase 41 dialogs stamp `createdAt`) to the top of today's group instantly |
+
+Display unchanged (still date-only); `createdAt` is used purely for ordering. Backdated expenses still group under their `expense_date`. No schema change. Deployed as `7a4afcc`.
 
 ---
 
